@@ -1,13 +1,20 @@
 {
   "name": "ted",
   "version": "0.1.0",
-  "description": "Graphe de connaissances fiscal/comptable pour agents IA — skills Markdown, data.gouv.fr, LadybugDB, MCP",
+  "description": "Knowledge graph fiscalité française pour agents IA — open data, skills Markdown, LadybugDB, MCP",
   "type": "module",
   "bin": {
     "ted": "./bin/ted.js"
   },
+  "files": [
+    "bin",
+    "dist",
+    "web",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "analyze": "node bin/ted.js analyze",
     "mcp": "node bin/ted.js mcp",
     "serve": "node bin/ted.js serve",
@@ -16,21 +23,34 @@
   "engines": {
     "node": ">=20"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "keywords": [
     "ted",
+    "tax-expert-documents",
     "graphrag",
+    "knowledge-graph",
     "ontology",
     "ladybug",
     "mcp",
-    "comptabilite",
     "fiscalite",
-    "data-gouv"
+    "comptabilite",
+    "france",
+    "data-gouv",
+    "agents"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/antonymarion/ted.git"
+    "url": "git+https://github.com/antonymarion/ted.git",
+    "directory": "ted"
   },
+  "bugs": {
+    "url": "https://github.com/antonymarion/ted/issues"
+  },
+  "homepage": "https://github.com/antonymarion/ted#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "commander": "^12.1.0",

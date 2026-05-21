@@ -14,16 +14,17 @@ Inspiré par les idées de [GitNexus](https://github.com/abhigyanpatwari/GitNexu
 ## Installation
 
 ```bash
+npm install -g ted
+# ou
+npx ted --version
+```
+
+Depuis les sources :
+
+```bash
 cd ted
 npm install
 npm run build
-```
-
-Depuis la racine du monorepo :
-
-```bash
-npm run ted:install
-npm run ted:build
 ```
 
 ## CLI
@@ -54,6 +55,15 @@ Options communes :
 ```
 
 Outils : `ted_status`, `ted_analyze`, `ted_query`, `ted_cypher`, `ted_context`, `ted_justify`.
+
+## Publication npm
+
+Le package est publié sur [npm](https://www.npmjs.com/package/ted) via GitHub Actions :
+
+- **CI** (`.github/workflows/ci.yml`) — build + `npm pack --dry-run` sur chaque push/PR `main`
+- **Publish** (`.github/workflows/publish-npm.yml`) — `npm publish` à la création d'une **GitHub Release**
+
+Configurer le secret **`NPM_TOKEN`** dans les paramètres du repo (token npm avec permission publish). Publier une release en incrémentant `version` dans `ted/package.json`.
 
 ## Licence
 
