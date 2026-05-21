@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 defaults:
   run:
@@ -37,3 +38,36 @@ jobs:
 
       - name: Verify package contents
         run: npm pack --dry-run
+
+  package:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ted/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ted
+        run: npm ci
+
+      - name: Build TypeScript
+        working-directory: ted
+        run: npm run build
+
+      - name: Create npm tarball
+        working-directory: ted
+        run: npm pack
+
+      - name: Upload npm package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ted-npm-${{ github.sha }}
+          path: ted/ted-*.tgz
+          retention-days: 90
