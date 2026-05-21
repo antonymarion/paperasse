@@ -1,0 +1,19 @@
+{
+  "name": "ted",
+  "version": "0.1.0",
+  "description": "Knowledge graph de la fiscalité française pour agents IA — GraphRAG, LadybugDB, MCP (justification ancrée)",
+  "private": true,
+  "scripts": {
+    "ted:install": "npm --prefix ted install",
+    "ted:build": "npm --prefix ted run build",
+    "ted:analyze": "node ted/bin/ted.js analyze",
+    "ted:serve": "node ted/bin/ted.js serve",
+    "ted:mcp": "node ted/bin/ted.js mcp",
+    "ted:status": "node ted/bin/ted.js status"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/antonymarion/ted.git"
+  },
+  "license": "MIT"
+}

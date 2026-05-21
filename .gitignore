@@ -1,0 +1,20 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+*.log
+node_modules/
+.ted/
+
+# Build artifacts (sources in ted/src/)
+ted/node_modules/
+
+# Données locales / secrets
+company.json
+/dougs/
+dougs/**
+
+# IDE / agents locaux
+.idea/
+.claude/
+.cursor/
