@@ -1,18 +1,14 @@
-import path from 'node:path';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { GraphStore, defaultIndexDir } from '../core/graph/store.js';
+import type { GraphStore } from '../core/graph/store.js';
 import { justifyAnswer } from '../core/search/justify.js';
 import { runAnalyze } from '../cli/analyze.js';
 
-export async function startMcpServer(repoRoot: string): Promise<void> {
-  const store = new GraphStore(defaultIndexDir(repoRoot));
-  await store.open();
-
+export function createTedMcpServer(store: GraphStore): Server {
   const server = new Server(
     { name: 'ted', version: '0.1.0' },
     { capabilities: { tools: {} } },
@@ -27,7 +23,7 @@ export async function startMcpServer(repoRoot: string): Promise<void> {
       },
       {
         name: 'ted_analyze',
-        description: 'Réindexer les skills Markdown et data.gouv.fr',
+        description: 'Mettre à jour data.gouv.fr et reconstruire le graphe',
         inputSchema: {
           type: 'object',
           properties: {
@@ -98,7 +94,6 @@ export async function startMcpServer(repoRoot: string): Promise<void> {
         }
         case 'ted_analyze': {
           const meta = await runAnalyze({
-            repo: repoRoot,
             datagouvQuery: a.datagouvQuery as string | undefined,
           });
           return {
@@ -144,7 +139,12 @@ export async function startMcpServer(repoRoot: string): Promise<void> {
     }
   });
 
+  return server;
+}
+
+export async function startMcpStdio(store: GraphStore): Promise<void> {
+  const server = createTedMcpServer(store);
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error(`[ted-mcp] repo=${path.resolve(repoRoot)}`);
+  console.error('[ted-mcp] stdio — index local ~/.ted/index');
 }

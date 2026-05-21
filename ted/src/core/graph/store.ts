@@ -203,10 +203,6 @@ export class GraphStore {
   }
 }
 
-export function defaultIndexDir(repoRoot: string): string {
-  return path.join(repoRoot, '.ted');
-}
-
-export function ladybugDatabasePath(repoRoot: string): string {
-  return path.join(defaultIndexDir(repoRoot), LADYBUG_DB_FILE);
+export function ladybugDatabasePath(indexDirectory: string): string {
+  return path.join(indexDirectory, LADYBUG_DB_FILE);
 }

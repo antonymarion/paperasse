@@ -20,9 +20,9 @@ Typiquement, vous l’utilisez pour :
 ### Chaîne d’indexation
 
 1. Ingestion Markdown (skills, frontmatter, sections, liens internes)
-2. Enrichissement optionnel data.gouv.fr
+2. Enrichissement data.gouv.fr (à chaque `ted analyze`)
 3. Ontologie LadybugDB + export `graph.json`
-4. Persistance dans `.ted/` à la racine du dépôt indexé
+4. Persistance dans **`~/.ted/index`** (ou `TED_HOME`)
 
 ### Structure de l’ontologie
 
@@ -92,24 +92,63 @@ npm run build
 
 | Commande | Description |
 |----------|-------------|
-| `ted analyze` | Indexe skills Markdown + data.gouv.fr |
+| `ted analyze` | Met à jour data.gouv.fr et reconstruit le graphe (`~/.ted/index`) |
 | `ted status` | Métadonnées de l'index |
-| `ted serve` | UI + API REST (port 3847) |
-| `ted mcp` | Serveur MCP stdio |
+| `ted serve` | UI graphe + API REST + MCP HTTP (port 3847) |
+| `ted mcp` | MCP stdio pour Cursor/Claude (alternative à `ted serve`) |
 
-Options communes :
+Options `analyze` :
 
-- `-r, --repo <path>` — racine du dépôt à indexer
 - `--no-datagouv` — sans enrichissement data.gouv.fr
+- `--datagouv-query <q>` — requête API data.gouv.fr personnalisée
+
+Variables d'environnement :
+
+| Variable | Description |
+|----------|-------------|
+| `TED_HOME` | Répertoire de données (défaut : `~/.ted`) |
+| `TED_SKILLS` | Racine des skills Markdown à indexer |
+
+## `ted serve` — stack unifiée
+
+Une seule commande démarre :
+
+| Endpoint | Rôle |
+|----------|------|
+| `http://127.0.0.1:3847/` | UI web — visualisation **force-graph** (d3 + force-graph) |
+| `http://127.0.0.1:3847/api/*` | API REST (graphe, recherche, contexte, justify) |
+| `http://127.0.0.1:3847/mcp` | Serveur MCP (transport HTTP streamable) |
+
+```bash
+ted analyze
+ted serve
+# UI : http://127.0.0.1:3847
+```
 
 ## MCP (Cursor / Claude)
+
+### HTTP (recommandé avec `ted serve`)
 
 ```json
 {
   "mcpServers": {
     "ted": {
-      "command": "node",
-      "args": ["C:/chemin/vers/ted/bin/ted.js", "mcp", "-r", "C:/chemin/vers/projet"]
+      "url": "http://127.0.0.1:3847/mcp"
+    }
+  }
+}
+```
+
+Lancez `ted serve` avant d'ouvrir Cursor.
+
+### stdio (sans serveur HTTP)
+
+```json
+{
+  "mcpServers": {
+    "ted": {
+      "command": "ted",
+      "args": ["mcp"]
     }
   }
 }
@@ -118,7 +157,7 @@ Options communes :
 | Outil | Description |
 |-------|-------------|
 | `ted_status` | État de l’index (skills, nœuds, moteur) |
-| `ted_analyze` | Réindexation skills + data.gouv.fr |
+| `ted_analyze` | Met à jour data.gouv.fr et reconstruit le graphe |
 | `ted_query` | Recherche sémantique légère dans le graphe |
 | `ted_cypher` | Requête Cypher sur LadybugDB |
 | `ted_context` | Sous-graphe autour d’un nœud (justification locale) |

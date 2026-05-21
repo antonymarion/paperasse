@@ -35,9 +35,12 @@ Cela permet de naviguer entre une règle comptable, la section qui la décrit, l
 
 ```bash
 npm install -g ted
-ted analyze -r /chemin/vers/votre-depot
-ted serve -r /chemin/vers/votre-depot
+ted analyze
+ted serve
 ```
+
+- **`ted analyze`** — met à jour data.gouv.fr et reconstruit le graphe dans `~/.ted/index`
+- **`ted serve`** — UI graphe (force-graph) + API REST + MCP HTTP sur le port 3847
 
 Documentation complète : [ted/README.md](ted/README.md).
 

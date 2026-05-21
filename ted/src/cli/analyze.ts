@@ -1,7 +1,6 @@
-import path from 'node:path';
-import fs from 'node:fs';
+import { GraphStore } from '../core/graph/store.js';
+import { indexDir, resolveSkillsRoot } from '../core/paths.js';
 import { buildGraphFromRepo, mergeGraphs } from '../core/markdown/ingest.js';
-import { GraphStore, defaultIndexDir } from '../core/graph/store.js';
 import { graphStats } from '../core/search/justify.js';
 import {
   datasetsToGraph,
@@ -10,18 +9,16 @@ import {
 import type { IndexMeta } from '../core/types.js';
 
 export interface AnalyzeOptions {
-  repo?: string;
   datagouv?: boolean;
   datagouvQuery?: string;
 }
 
 export async function runAnalyze(opts: AnalyzeOptions = {}): Promise<IndexMeta> {
-  const repoRoot = path.resolve(opts.repo ?? process.cwd());
-  const indexDir = defaultIndexDir(repoRoot);
-  const store = new GraphStore(indexDir);
+  const skillsRoot = resolveSkillsRoot();
+  const store = new GraphStore(indexDir());
   await store.open();
 
-  let graph = await buildGraphFromRepo(repoRoot);
+  let graph = await buildGraphFromRepo(skillsRoot);
   let datagouvCount = 0;
 
   if (opts.datagouv !== false) {
@@ -40,7 +37,8 @@ export async function runAnalyze(opts: AnalyzeOptions = {}): Promise<IndexMeta> 
   const documentCount = graph.nodes.filter((n) => n.label === 'Document').length;
 
   const meta: IndexMeta = {
-    repoPath: repoRoot,
+    indexPath: indexDir(),
+    skillsRoot,
     indexedAt: new Date().toISOString(),
     skillCount,
     documentCount,
@@ -52,7 +50,8 @@ export async function runAnalyze(opts: AnalyzeOptions = {}): Promise<IndexMeta> 
 
   await store.saveGraph(graph, meta);
 
-  console.log(`[ted] Index écrit dans ${indexDir}`);
+  console.log(`[ted] Index écrit dans ${indexDir()}`);
+  console.log(`  Skills source: ${skillsRoot}`);
   console.log(`  Skills: ${skillCount}, Documents: ${documentCount}`);
   console.log(`  Nœuds: ${meta.nodeCount}, Arêtes: ${meta.edgeCount}`);
   console.log(`  data.gouv.fr: ${datagouvCount} jeux de données`);
@@ -62,9 +61,8 @@ export async function runAnalyze(opts: AnalyzeOptions = {}): Promise<IndexMeta> 
   return meta;
 }
 
-export async function runStatus(repo?: string): Promise<void> {
-  const repoRoot = path.resolve(repo ?? process.cwd());
-  const store = new GraphStore(defaultIndexDir(repoRoot));
+export async function runStatus(): Promise<void> {
+  const store = new GraphStore(indexDir());
   await store.open();
   const meta = store.loadMeta();
   if (!meta) {
@@ -72,18 +70,4 @@ export async function runStatus(repo?: string): Promise<void> {
     return;
   }
   console.log(JSON.stringify(meta, null, 2));
-}
-
-export function resolveRepo(cwd = process.cwd()): string {
-  let dir = cwd;
-  while (dir !== path.dirname(dir)) {
-    if (
-      fs.existsSync(path.join(dir, 'comptable', 'SKILL.md')) ||
-      fs.existsSync(path.join(dir, '.ted'))
-    ) {
-      return dir;
-    }
-    dir = path.dirname(dir);
-  }
-  return cwd;
 }

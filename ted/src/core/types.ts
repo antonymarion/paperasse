@@ -37,7 +37,10 @@ export interface KnowledgeGraph {
 }
 
 export interface IndexMeta {
-  repoPath: string;
+  indexPath: string;
+  skillsRoot: string;
+  /** @deprecated ancien champ — conservé pour compatibilité meta.json */
+  repoPath?: string;
   indexedAt: string;
   skillCount: number;
   documentCount: number;

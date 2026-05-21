@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TED</title>
+  <title>TED — graphe fiscal</title>
   <style>
     :root {
       --bg: #0f1419;
@@ -27,11 +27,12 @@
       display: flex;
       align-items: center;
       gap: 1rem;
+      flex-wrap: wrap;
     }
     header h1 { font-size: 1.1rem; margin: 0; }
     header span { color: var(--muted); font-size: 0.85rem; }
     main { display: grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 57px); }
-    aside, section { padding: 1rem; }
+    aside, section { padding: 1rem; overflow: auto; }
     aside { border-right: 1px solid var(--border); background: var(--panel); }
     input, textarea, button {
       width: 100%;
@@ -57,18 +58,16 @@
       margin-bottom: 0.5rem;
       cursor: pointer;
     }
-    .hit:hover { border-color: var(--accent); }
+    .hit:hover, .hit.active { border-color: var(--accent); }
     .hit .label { font-size: 0.7rem; color: var(--accent); text-transform: uppercase; }
-    #graph-view {
-      height: 420px;
+    #graph-container {
+      height: calc(100vh - 120px);
+      min-height: 420px;
       border: 1px solid var(--border);
       border-radius: 8px;
-      overflow: auto;
-      font-family: ui-monospace, monospace;
-      font-size: 0.75rem;
-      padding: 0.75rem;
       background: #0a0e14;
     }
+    .legend { font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem; }
     .citations { margin-top: 1rem; }
     .citation {
       border-left: 3px solid var(--accent);
@@ -76,12 +75,15 @@
       margin-bottom: 0.75rem;
       font-size: 0.85rem;
     }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>TED</h1>
-    <span>Ontologie skills · Ladybug · inspiré GitNexus</span>
+    <span>Ontologie fiscal/comptable · force-graph · LadybugDB</span>
   </header>
   <main>
     <aside>
@@ -94,72 +96,14 @@
       <div id="results"></div>
     </aside>
     <section>
-      <h2 style="margin-top:0;font-size:1rem;">Graphe / contexte</h2>
-      <div id="graph-view">Sélectionnez un nœud pour voir le sous-graphe.</div>
+      <h2 style="margin-top:0;font-size:1rem;">Visualisation du graphe</h2>
+      <div id="graph-container"></div>
+      <p class="legend">Cliquez un nœud pour centrer · molette pour zoomer · glisser pour déplacer</p>
       <div class="citations" id="citations"></div>
     </section>
   </main>
-  <script>
-    const $ = (id) => document.getElementById(id);
-
-    async function loadStatus() {
-      const meta = await fetch('/api/status').then((r) => r.json());
-      if (!meta.indexedAt) {
-        $('status').textContent = 'Index absent — lancez: ted analyze';
-        return;
-      }
-      $('status').innerHTML = `
-        Indexé: ${new Date(meta.indexedAt).toLocaleString('fr-FR')}<br>
-        Skills: ${meta.skillCount} · Docs: ${meta.documentCount}<br>
-        Nœuds: ${meta.nodeCount} · Arêtes: ${meta.edgeCount}<br>
-        data.gouv.fr: ${meta.datagouvDatasets} datasets<br>
-        Moteur: ${meta.engine}
-      `;
-    }
-
-    async function search() {
-      const q = $('query').value.trim();
-      if (!q) return;
-      const hits = await fetch(`/api/query?q=${encodeURIComponent(q)}`).then((r) => r.json());
-      $('results').innerHTML = hits.map((h) => `
-        <div class="hit" data-id="${h.id}">
-          <div class="label">${h.label}</div>
-          <strong>${h.name}</strong>
-          <div style="color:var(--muted);font-size:0.8rem">${h.path || h.excerpt || ''}</div>
-        </div>
-      `).join('');
-      document.querySelectorAll('.hit').forEach((el) => {
-        el.onclick = () => showContext(el.dataset.id);
-      });
-    }
-
-    async function showContext(nodeId) {
-      const sub = await fetch(`/api/context/${encodeURIComponent(nodeId)}?depth=2`).then((r) => r.json());
-      $('graph-view').textContent = JSON.stringify(sub, null, 2);
-    }
-
-    async function justify() {
-      const question = $('query').value.trim();
-      const draft = $('draft').value.trim();
-      if (!question) return;
-      const j = await fetch('/api/justify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, draft: draft || undefined }),
-      }).then((r) => r.json());
-      $('citations').innerHTML = `<p>${j.summary.replace(/\n/g, '<br>')}</p>` +
-        j.citations.map((c) => `
-          <div class="citation">
-            <strong>${c.name}</strong> (${c.label})<br>
-            ${c.document || c.excerpt}
-          </div>
-        `).join('');
-    }
-
-    $('search').onclick = search;
-    $('query').onkeydown = (e) => e.key === 'Enter' && search();
-    $('justify-btn').onclick = justify;
-    loadStatus();
-  </script>
+  <script src="https://unpkg.com/d3@7"></script>
+  <script src="https://unpkg.com/force-graph"></script>
+  <script src="/app.js"></script>
 </body>
 </html>

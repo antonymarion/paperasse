@@ -10,6 +10,7 @@
     "bin",
     "dist",
     "web",
+    "skills",
     "README.md"
   ],
   "scripts": {

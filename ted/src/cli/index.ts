@@ -1,6 +1,8 @@
 import { Command } from 'commander';
-import { runAnalyze, runStatus, resolveRepo } from './analyze.js';
-import { startMcpServer } from '../mcp/server.js';
+import { runAnalyze, runStatus } from './analyze.js';
+import { GraphStore } from '../core/graph/store.js';
+import { indexDir } from '../core/paths.js';
+import { startMcpStdio } from '../mcp/server.js';
 import { startServe } from '../serve/api.js';
 
 export function buildCli(): Command {
@@ -15,13 +17,11 @@ export function buildCli(): Command {
 
   program
     .command('analyze')
-    .description('Indexer les skills Markdown et optionnellement data.gouv.fr')
-    .option('-r, --repo <path>', 'Racine du dépôt (skills / projet)')
+    .description('Mettre à jour data.gouv.fr et reconstruire le graphe (~/.ted/index)')
     .option('--no-datagouv', 'Ne pas enrichir avec data.gouv.fr')
     .option('--datagouv-query <q>', 'Requête API data.gouv.fr')
     .action(async (opts) => {
       await runAnalyze({
-        repo: opts.repo ?? resolveRepo(),
         datagouv: opts.datagouv,
         datagouvQuery: opts.datagouvQuery,
       });
@@ -29,27 +29,26 @@ export function buildCli(): Command {
 
   program
     .command('status')
-    .description('Afficher l\'état de l\'index local')
-    .option('-r, --repo <path>', 'Racine du dépôt')
-    .action(async (opts) => {
-      await runStatus(opts.repo ?? resolveRepo());
+    .description('Afficher l\'état de l\'index local (~/.ted/index)')
+    .action(async () => {
+      await runStatus();
     });
 
   program
     .command('mcp')
-    .description('Démarrer le serveur MCP (stdio) pour agents Cursor/Claude')
-    .option('-r, --repo <path>', 'Racine du dépôt')
-    .action(async (opts) => {
-      await startMcpServer(opts.repo ?? resolveRepo());
+    .description('Serveur MCP stdio (Cursor/Claude) — préférez ted serve pour HTTP + UI')
+    .action(async () => {
+      const store = new GraphStore(indexDir());
+      await store.open();
+      await startMcpStdio(store);
     });
 
   program
     .command('serve')
-    .description('UI web + API REST (style GitNexus)')
-    .option('-r, --repo <path>', 'Racine du dépôt')
+    .description('UI graphe + API REST + MCP HTTP (port 3847)')
     .option('-p, --port <n>', 'Port HTTP', '3847')
     .action(async (opts) => {
-      await startServe(opts.repo ?? resolveRepo(), Number(opts.port));
+      await startServe(Number(opts.port));
     });
 
   return program;

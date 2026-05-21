@@ -1,11 +1,16 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { GraphStore, defaultIndexDir } from '../core/graph/store.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { GraphStore } from '../core/graph/store.js';
+import { indexDir } from '../core/paths.js';
 import { justifyAnswer } from '../core/search/justify.js';
+import { createTedMcpServer } from '../mcp/server.js';
 
-export async function startServe(repoRoot: string, port: number): Promise<void> {
-  const store = new GraphStore(defaultIndexDir(repoRoot));
+const DEFAULT_PORT = 3847;
+
+export async function startServe(port = DEFAULT_PORT): Promise<void> {
+  const store = new GraphStore(indexDir());
   await store.open();
 
   const app = express();
@@ -39,8 +44,42 @@ export async function startServe(repoRoot: string, port: number): Promise<void> 
     res.json(await justifyAnswer(store, question, draft));
   });
 
-  app.listen(port, () => {
-    console.log(`[ted] UI http://localhost:${port}`);
-    console.log(`[ted] API http://localhost:${port}/api/status`);
+  app.post('/mcp', async (req, res) => {
+    const server = createTedMcpServer(store);
+    try {
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+      });
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+      res.on('close', () => {
+        void transport.close();
+        void server.close();
+      });
+    } catch (err) {
+      console.error('[ted] Erreur MCP HTTP:', err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: '2.0',
+          error: { code: -32603, message: 'Internal server error' },
+          id: null,
+        });
+      }
+    }
+  });
+
+  app.get('/mcp', (_req, res) => {
+    res.status(405).json({
+      jsonrpc: '2.0',
+      error: { code: -32000, message: 'Utilisez POST pour le transport MCP streamable HTTP.' },
+      id: null,
+    });
+  });
+
+  app.listen(port, '127.0.0.1', () => {
+    console.log(`[ted] UI graphe     http://127.0.0.1:${port}`);
+    console.log(`[ted] API REST      http://127.0.0.1:${port}/api/status`);
+    console.log(`[ted] MCP (HTTP)    http://127.0.0.1:${port}/mcp`);
+    console.log(`[ted] Index         ${indexDir()}`);
   });
 }
