@@ -16,11 +16,6 @@ on:
         required: false
         type: boolean
         default: false
-      use_legacy_token:
-        description: 'Première publication uniquement — utiliser NPM_TOKEN au lieu d OIDC'
-        required: false
-        type: boolean
-        default: false
 
 defaults:
   run:
@@ -31,7 +26,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +34,7 @@ jobs:
         with:
           node-version: '22'
           registry-url: https://registry.npmjs.org
+          always-auth: true
           cache: npm
           cache-dependency-path: ted/package-lock.json
 
@@ -68,20 +63,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish to npm (Trusted Publishing OIDC)
+      - name: Publish to npm
         if: |
           github.event.inputs.skip_npm_publish != 'true' &&
-          github.event.inputs.use_legacy_token != 'true' &&
           (github.event_name == 'release' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/'))
         run: |
           npx --yes npm@11 publish --access public --provenance=false --tag "${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || 'latest' }}"
-
-      - name: Publish to npm (legacy NPM_TOKEN — 1ère publication)
-        if: |
-          github.event.inputs.skip_npm_publish != 'true' &&
-          github.event.inputs.use_legacy_token == 'true' &&
-          github.event_name == 'workflow_dispatch'
-        run: |
-          npx --yes npm@11 publish --access public --provenance=false --tag "${{ github.event.inputs.tag || 'latest' }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
