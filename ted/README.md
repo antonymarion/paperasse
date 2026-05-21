@@ -439,9 +439,16 @@ npm install -g tax-expert-documents
 
 **Première publication** :
 
-1. Créer un [token npm](https://www.npmjs.com/settings/~youruser/tokens) (type *Publish*).
-2. Ajouter le secret **`NPM_TOKEN`** dans [Settings → Secrets](https://github.com/antonymarion/ted/settings/secrets/actions) du repo.
+1. Créer un [token npm](https://www.npmjs.com/settings/~youruser/tokens) :
+   - type **Granular Access Token** ou **Classic Automation** (CI uniquement, pas de 2FA à chaque publish) ;
+   - permission **Publish** sur le package `tax-expert-documents` (ou scope *All packages* si premier publish) ;
+   - durée de vie : **90 jours max** (npm impose 7 jours par défaut pour les tokens *write* — choisir explicitement 90 j dans les options avancées).
+2. Ajouter le secret **`NPM_TOKEN`** dans [Settings → Secrets](https://github.com/antonymarion/ted/settings/secrets/actions) du repo GitHub.
 3. Lancer **Actions → Publish npm → Run workflow** (ou créer une GitHub Release).
+
+> **Renouvellement** : planifier le renouvellement du token avant expiration (rappel calendrier à J-14). Le workflow échouera avec `401`/`403` si le token est expiré — regénérer le token npm et mettre à jour `NPM_TOKEN` sur GitHub.
+
+La publication utilise **`--provenance`** (attestation GitHub ↔ npm) ; le token reste nécessaire pour l’authentification registry.
 
 Installation depuis un artefact CI :
 
