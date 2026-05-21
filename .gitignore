@@ -8,6 +8,7 @@ node_modules/
 
 # Build artifacts (sources in ted/src/)
 ted/node_modules/
+ted/dist/
 
 # Données locales / secrets
 company.json

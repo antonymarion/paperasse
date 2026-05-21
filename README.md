@@ -1,4 +1,4 @@
-# TED
+# TED — Tax Expert Documents
 
 Monorepo léger autour du package [`ted/`](ted/README.md) — graphe de connaissances fiscal/comptable pour agents IA.
 
