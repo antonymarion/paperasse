@@ -7,6 +7,10 @@ const LABEL_COLORS = {
   Rule: '#ef4444',
   Reference: '#64748b',
   Dataset: '#06b6d4',
+  Company: '#ec4899',
+  Provider: '#14b8a6',
+  Account: '#8b5cf6',
+  Transaction: '#f97316',
 };
 
 const $ = (id) => document.getElementById(id);
@@ -70,6 +74,8 @@ async function loadStatus() {
   $('status').innerHTML = `
     Indexé: ${new Date(meta.indexedAt).toLocaleString('fr-FR')}<br>
     Skills: ${meta.skillCount} · Docs: ${meta.documentCount}<br>
+    Comptes: ${meta.accountCount ?? 0} · Transactions: ${meta.transactionCount ?? 0}<br>
+    Fournisseurs: ${(meta.providersSynced ?? []).join(', ') || '—'}<br>
     Nœuds: ${meta.nodeCount} · Arêtes: ${meta.edgeCount}<br>
     data.gouv.fr: ${meta.datagouvDatasets} datasets<br>
     Moteur: ${meta.engine}

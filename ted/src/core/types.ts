@@ -6,7 +6,11 @@ export type NodeLabel =
   | 'Term'
   | 'Rule'
   | 'Reference'
-  | 'Dataset';
+  | 'Dataset'
+  | 'Company'
+  | 'Provider'
+  | 'Account'
+  | 'Transaction';
 
 export type EdgeLabel =
   | 'CONTAINS'
@@ -14,7 +18,10 @@ export type EdgeLabel =
   | 'REFERENCES'
   | 'DEFINED_IN'
   | 'RELATED_TO'
-  | 'SOURCED_FROM';
+  | 'SOURCED_FROM'
+  | 'HAS_ACCOUNT'
+  | 'RECORDED'
+  | 'CATEGORIZED_AS';
 
 export interface GraphNode {
   id: string;
@@ -47,6 +54,9 @@ export interface IndexMeta {
   nodeCount: number;
   edgeCount: number;
   datagouvDatasets: number;
+  accountCount: number;
+  transactionCount: number;
+  providersSynced: string[];
   engine: 'ladybug' | 'json-fallback';
 }
 

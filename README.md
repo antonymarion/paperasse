@@ -39,8 +39,10 @@ ted analyze
 ted serve
 ```
 
-- **`ted analyze`** — met à jour data.gouv.fr et reconstruit le graphe dans `~/.ted/index`
+- **`ted analyze`** — met à jour **data.gouv.fr**, synchronise les **comptes** (Qonto…) et reconstruit le graphe dans `~/.ted/index`
 - **`ted serve`** — UI graphe (force-graph) + API REST + MCP HTTP sur le port 3847
+
+Configuration comptes : `~/.ted/company.json` + `~/.ted/.env` (voir [ted/README.md](ted/README.md)).
 
 Documentation complète : [ted/README.md](ted/README.md).
 

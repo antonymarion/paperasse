@@ -11,6 +11,7 @@
     "dist",
     "web",
     "skills",
+    "company.example.json",
     "README.md"
   ],
   "scripts": {

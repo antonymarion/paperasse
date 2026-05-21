@@ -17,12 +17,16 @@ export function buildCli(): Command {
 
   program
     .command('analyze')
-    .description('Mettre à jour data.gouv.fr et reconstruire le graphe (~/.ted/index)')
+    .description(
+      'Mettre à jour open data + comptes (Qonto…) et reconstruire le graphe (~/.ted/index)',
+    )
     .option('--no-datagouv', 'Ne pas enrichir avec data.gouv.fr')
+    .option('--no-accounts', 'Ne pas synchroniser les comptes bancaires')
     .option('--datagouv-query <q>', 'Requête API data.gouv.fr')
     .action(async (opts) => {
       await runAnalyze({
         datagouv: opts.datagouv,
+        accounts: opts.accounts,
         datagouvQuery: opts.datagouvQuery,
       });
     });

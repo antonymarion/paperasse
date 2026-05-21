@@ -18,6 +18,22 @@ export function indexDir(): string {
   return path.join(tedHomeDir(), 'index');
 }
 
+/** Fichier de configuration société (~/.ted/company.json). */
+export function companyConfigPath(): string {
+  if (process.env.TED_COMPANY) return path.resolve(process.env.TED_COMPANY);
+  return path.join(tedHomeDir(), 'company.json');
+}
+
+/** Cache transactions / données comptes (~/.ted/data/transactions). */
+export function transactionsDir(): string {
+  return path.join(tedHomeDir(), 'data', 'transactions');
+}
+
+/** Journal comptable local optionnel (~/.ted/data/journal-entries.json). */
+export function journalEntriesPath(): string {
+  return path.join(tedHomeDir(), 'data', 'journal-entries.json');
+}
+
 /**
  * Racine des skills Markdown indexés.
  * TED_SKILLS > skills/ du package > répertoire parent (dev monorepo).

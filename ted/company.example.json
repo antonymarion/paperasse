@@ -1,0 +1,28 @@
+{
+  "name": "MA SOCIETE",
+  "legal_form": "SASU",
+  "siren": "123456789",
+  "fiscal_year": {
+    "start": "2025-01-01",
+    "end": "2025-12-31"
+  },
+  "banks": [
+    {
+      "id": "bank-1",
+      "name": "Banque principale",
+      "account": "5121"
+    }
+  ],
+  "qonto": {
+    "enabled": true,
+    "_comment": "Identifiants dans ~/.ted/.env : QONTO_ID, QONTO_API_SECRET"
+  },
+  "stripe_accounts": [
+    {
+      "id": "main",
+      "name": "Mon activité",
+      "env_key": "STRIPE_SECRET",
+      "_comment": "Déposer les exports dans ~/.ted/data/transactions/stripe-main.json"
+    }
+  ]
+}

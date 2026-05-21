@@ -92,7 +92,7 @@ npm run build
 
 | Commande | Description |
 |----------|-------------|
-| `ted analyze` | Met à jour data.gouv.fr et reconstruit le graphe (`~/.ted/index`) |
+| `ted analyze` | Met à jour **data.gouv.fr**, synchronise les **comptes** (Qonto…) et reconstruit le graphe (`~/.ted/index`) |
 | `ted status` | Métadonnées de l'index |
 | `ted serve` | UI graphe + API REST + MCP HTTP (port 3847) |
 | `ted mcp` | MCP stdio pour Cursor/Claude (alternative à `ted serve`) |
@@ -100,7 +100,28 @@ npm run build
 Options `analyze` :
 
 - `--no-datagouv` — sans enrichissement data.gouv.fr
+- `--no-accounts` — sans synchronisation des comptes bancaires
 - `--datagouv-query <q>` — requête API data.gouv.fr personnalisée
+
+### Configuration comptes (`~/.ted/`)
+
+```bash
+mkdir -p ~/.ted
+cp "$(npm root -g)/ted/company.example.json" ~/.ted/company.json
+# éditer company.json puis créer ~/.ted/.env :
+# QONTO_ID=...
+# QONTO_API_SECRET=...
+ted analyze
+```
+
+`ted analyze` exécute dans l’ordre :
+
+1. **Skills Markdown** — règles métier (PCG, TVA, IS…)
+2. **data.gouv.fr** — jeux open data fiscal/comptable
+3. **Comptes rattachés** — sync Qonto si credentials présents ; ingestion des caches `~/.ted/data/transactions/*.json` (Qonto, Stripe, Dougs…)
+4. **Journal local** — `~/.ted/data/journal-entries.json` si présent
+
+Le graphe relie alors **société → compte → transaction → catégorie / compte PCG**, ce qui permet à l’agent de répondre à des questions du type « combien ai-je dépensé en restauration ce trimestre ? » ou « quelle écriture pour cette ligne Qonto ? ».
 
 Variables d'environnement :
 
@@ -108,6 +129,8 @@ Variables d'environnement :
 |----------|-------------|
 | `TED_HOME` | Répertoire de données (défaut : `~/.ted`) |
 | `TED_SKILLS` | Racine des skills Markdown à indexer |
+| `TED_COMPANY` | Chemin vers `company.json` (défaut : `~/.ted/company.json`) |
+| `TED_JOURNAL` | Chemin vers le journal comptable JSON |
 
 ## `ted serve` — stack unifiée
 
