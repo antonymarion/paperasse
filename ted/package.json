@@ -1,5 +1,5 @@
 {
-  "name": "ted",
+  "name": "tax-expert-documents",
   "version": "0.1.0",
   "description": "Knowledge graph fiscalité française pour agents IA — open data, skills Markdown, LadybugDB, MCP",
   "type": "module",
@@ -52,7 +52,7 @@
   "bugs": {
     "url": "https://github.com/antonymarion/ted/issues"
   },
-  "homepage": "https://github.com/antonymarion/ted#readme",
+  "homepage": "https://www.npmjs.com/package/tax-expert-documents",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "commander": "^12.1.0",

@@ -69,5 +69,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ted-npm-${{ github.sha }}
-          path: ted/ted-*.tgz
+          path: ted/*.tgz
           retention-days: 90

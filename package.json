@@ -1,5 +1,5 @@
 {
-  "name": "ted",
+  "name": "tax-expert-documents-monorepo",
   "version": "0.1.0",
   "description": "Knowledge graph de la fiscalité française pour agents IA — GraphRAG, LadybugDB, MCP (justification ancrée)",
   "private": true,

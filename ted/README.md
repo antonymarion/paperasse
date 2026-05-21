@@ -75,10 +75,13 @@ Un RAG vectoriel retourne des paragraphes **similaires**. TED retourne un **rés
 ## Installation
 
 ```bash
-npm install -g ted
-# ou
-npx ted --version
+npm install -g tax-expert-documents
+ted --version
+# ou sans installation globale :
+npx tax-expert-documents analyze
 ```
+
+> Le package npm s’appelle **`tax-expert-documents`** (le nom `ted` est déjà pris sur npm). La commande CLI reste **`ted`**.
 
 Depuis les sources :
 
@@ -86,6 +89,7 @@ Depuis les sources :
 cd ted
 npm install
 npm run build
+node bin/ted.js --version
 ```
 
 ## CLI
@@ -93,9 +97,9 @@ npm run build
 | Commande | Description |
 |----------|-------------|
 | `ted analyze` | Met à jour **data.gouv.fr**, synchronise les **comptes** (Qonto…) et reconstruit le graphe (`~/.ted/index`) |
-| `ted status` | Métadonnées de l'index |
-| `ted serve` | UI graphe + API REST + MCP HTTP (port 3847) |
-| `ted mcp` | MCP stdio pour Cursor/Claude (alternative à `ted serve`) |
+| `ted status` | Métadonnées de l'index (JSON) |
+| `ted serve` | UI graphe + API REST + MCP HTTP |
+| `ted mcp` | MCP stdio (Cursor/Claude) — aucun port réseau |
 
 Options `analyze` :
 
@@ -103,12 +107,16 @@ Options `analyze` :
 - `--no-accounts` — sans synchronisation des comptes bancaires
 - `--datagouv-query <q>` — requête API data.gouv.fr personnalisée
 
+Options `serve` :
+
+- `-p, --port <n>` — port HTTP (défaut **3847**)
+
 ### Configuration comptes (`~/.ted/`)
 
 ```bash
 mkdir -p ~/.ted
-cp "$(npm root -g)/ted/company.example.json" ~/.ted/company.json
-# éditer company.json puis créer ~/.ted/.env :
+cp "$(npm root -g)/tax-expert-documents/company.example.json" ~/.ted/company.json
+# ~/.ted/.env
 # QONTO_ID=...
 # QONTO_API_SECRET=...
 ted analyze
@@ -121,8 +129,6 @@ ted analyze
 3. **Comptes rattachés** — sync Qonto si credentials présents ; ingestion des caches `~/.ted/data/transactions/*.json` (Qonto, Stripe, Dougs…)
 4. **Journal local** — `~/.ted/data/journal-entries.json` si présent
 
-Le graphe relie alors **société → compte → transaction → catégorie / compte PCG**, ce qui permet à l’agent de répondre à des questions du type « combien ai-je dépensé en restauration ce trimestre ? » ou « quelle écriture pour cette ligne Qonto ? ».
-
 Variables d'environnement :
 
 | Variable | Description |
@@ -131,26 +137,180 @@ Variables d'environnement :
 | `TED_SKILLS` | Racine des skills Markdown à indexer |
 | `TED_COMPANY` | Chemin vers `company.json` (défaut : `~/.ted/company.json`) |
 | `TED_JOURNAL` | Chemin vers le journal comptable JSON |
+| `QONTO_ID` / `QONTO_API_SECRET` | Identifiants API Qonto (`~/.ted/.env`) |
 
-## `ted serve` — stack unifiée
+---
 
-Une seule commande démarre :
+## Réseau et ports
 
-| Endpoint | Rôle |
-|----------|------|
-| `http://127.0.0.1:3847/` | UI web — visualisation **force-graph** (d3 + force-graph) |
-| `http://127.0.0.1:3847/api/*` | API REST (graphe, recherche, contexte, justify) |
-| `http://127.0.0.1:3847/mcp` | Serveur MCP (transport HTTP streamable) |
+TED n’ouvre **qu’un seul port TCP** en mode serveur :
+
+| Mode | Port | Interface | Protocole |
+|------|------|-----------|-----------|
+| `ted serve` | **3847** (défaut) | `127.0.0.1` uniquement | HTTP |
+| `ted serve -p 8080` | personnalisé | `127.0.0.1` | HTTP |
+| `ted mcp` | — | stdio (stdin/stdout) | MCP JSON-RPC |
+| `ted analyze` / `ted status` | — | aucun serveur | — |
+
+Sur ce port unique (`ted serve`), coexistent :
+
+- UI web statique (`/`, `/app.js`)
+- API REST (`/api/*`)
+- MCP HTTP streamable (`POST /mcp`)
+
+Aucun autre port n’est utilisé (pas de WebSocket séparé, pas de base LadybugDB exposée en réseau).
 
 ```bash
 ted analyze
-ted serve
-# UI : http://127.0.0.1:3847
+ted serve          # http://127.0.0.1:3847
+ted serve -p 9000  # http://127.0.0.1:9000
 ```
 
-## MCP (Cursor / Claude)
+---
 
-### HTTP (recommandé avec `ted serve`)
+## API REST
+
+Base URL : `http://127.0.0.1:3847` (ou le port choisi).
+
+Toutes les réponses sont en **JSON**. CORS non configuré (usage local).
+
+### `GET /api/status`
+
+État de l’index local.
+
+**Réponse 200** — objet `IndexMeta` ou `{ "indexed": false }` si jamais analysé :
+
+```json
+{
+  "indexPath": "/home/user/.ted/index",
+  "skillsRoot": "/path/to/skills",
+  "indexedAt": "2026-05-21T12:00:00.000Z",
+  "skillCount": 6,
+  "documentCount": 42,
+  "nodeCount": 1200,
+  "edgeCount": 3400,
+  "datagouvDatasets": 15,
+  "accountCount": 2,
+  "transactionCount": 847,
+  "providersSynced": ["qonto"],
+  "engine": "ladybug"
+}
+```
+
+### `GET /api/graph`
+
+Graphe complet sérialisé.
+
+**Réponse 200** :
+
+```json
+{
+  "nodes": [
+    { "id": "Skill:comptable", "label": "Skill", "name": "comptable", "properties": {} }
+  ],
+  "edges": [
+    { "id": "e:...", "from": "...", "to": "...", "label": "CONTAINS" }
+  ]
+}
+```
+
+### `GET /api/query`
+
+Recherche textuelle légère dans les nœuds (score par tokens).
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `q` | string | — | Requête (ex. `TVA`, `restaurant`, `6257`) |
+| `limit` | number | 20 | Nombre max de résultats |
+
+**Exemple** : `GET /api/query?q=TVA+déductible&limit=10`
+
+**Réponse 200** — tableau de `QueryHit` :
+
+```json
+[
+  {
+    "id": "Concept:tva-deductible",
+    "label": "Concept",
+    "name": "TVA déductible",
+    "score": 4,
+    "excerpt": "comptable/TVA.md",
+    "skill": "comptable",
+    "path": "comptable/TVA.md"
+  }
+]
+```
+
+### `GET /api/context/:nodeId`
+
+Sous-graphe autour d’un nœud (voisinage).
+
+| Paramètre | Type | Défaut | Description |
+|-----------|------|--------|-------------|
+| `nodeId` | path | — | Identifiant nœud (URL-encodé) |
+| `depth` | query | 1 | Profondeur de traversal |
+
+**Exemple** : `GET /api/context/Transaction:qonto:tx-demo-1?depth=2`
+
+**Réponse 200** — `{ nodes, edges }` (même schéma que `/api/graph`).
+
+### `POST /api/justify`
+
+Justifie une réponse agent avec citations depuis l’index.
+
+**Corps** (`application/json`) :
+
+```json
+{
+  "question": "Puis-je déduire la TVA sur ce repas client ?",
+  "draft": "Oui, TVA déductible à 20 %."
+}
+```
+
+| Champ | Requis | Description |
+|-------|--------|-------------|
+| `question` | oui | Question posée |
+| `draft` | non | Proposition de l’agent à vérifier |
+
+**Réponse 200** — `JustifyResult` :
+
+```json
+{
+  "question": "...",
+  "summary": "Question : ...\n3 source(s) trouvée(s)...",
+  "citations": [
+    {
+      "nodeId": "Section:...",
+      "label": "Section",
+      "name": "TVA déductible",
+      "excerpt": "comptable/TVA.md",
+      "skill": "comptable",
+      "document": "comptable/TVA.md"
+    }
+  ]
+}
+```
+
+**Réponse 400** : `{ "error": "question requise" }`
+
+---
+
+## MCP — contrat et outils
+
+TED expose le **Model Context Protocol** de deux façons :
+
+| Transport | Commande | URL / canal |
+|-----------|----------|-------------|
+| HTTP streamable | `ted serve` | `POST http://127.0.0.1:3847/mcp` |
+| stdio | `ted mcp` | stdin/stdout (JSON-RPC) |
+
+**Serveur MCP** : `name: ted`, version = version npm.
+
+**Capacités** : `tools` uniquement (pas de resources ni prompts).
+
+### Configuration Cursor
+
+HTTP (recommandé — UI + API + MCP sur le même port) :
 
 ```json
 {
@@ -162,9 +322,7 @@ ted serve
 }
 ```
 
-Lancez `ted serve` avant d'ouvrir Cursor.
-
-### stdio (sans serveur HTTP)
+stdio :
 
 ```json
 {
@@ -177,28 +335,118 @@ Lancez `ted serve` avant d'ouvrir Cursor.
 }
 ```
 
-| Outil | Description |
-|-------|-------------|
-| `ted_status` | État de l’index (skills, nœuds, moteur) |
-| `ted_analyze` | Met à jour data.gouv.fr et reconstruit le graphe |
-| `ted_query` | Recherche sémantique légère dans le graphe |
-| `ted_cypher` | Requête Cypher sur LadybugDB |
-| `ted_context` | Sous-graphe autour d’un nœud (justification locale) |
-| `ted_justify` | Citations sources pour une question ou une proposition de réponse |
+### Outils MCP
+
+Chaque outil renvoie `{ content: [{ type: "text", text: "<JSON>" }] }`. En cas d’erreur : `isError: true`.
+
+#### `ted_status`
+
+État de l’index (`IndexMeta` ou `null`).
+
+| Entrée | Type | Requis |
+|--------|------|--------|
+| _(aucun)_ | | |
+
+**Usage agent** : vérifier si `ted analyze` a été lancé, combien de transactions/comptes sont indexés.
+
+#### `ted_analyze`
+
+Met à jour data.gouv.fr, synchronise les comptes et **reconstruit** le graphe.
+
+| Entrée | Type | Requis | Description |
+|--------|------|--------|-------------|
+| `datagouvQuery` | string | non | Requête API data.gouv.fr |
+
+**Retour** : `IndexMeta` JSON.
+
+**Usage agent** : rafraîchir les données avant une question sur les opérations bancaires récentes.
+
+#### `ted_query`
+
+Recherche dans le graphe (même logique que `GET /api/query`).
+
+| Entrée | Type | Requis | Description |
+|--------|------|--------|-------------|
+| `query` | string | oui | Texte libre |
+| `limit` | number | non | Défaut 12 |
+
+**Retour** : `QueryHit[]`.
+
+**Usage agent** : trouver nœuds pertinents (règles PCG, transactions, concepts).
+
+#### `ted_context`
+
+Sous-graphe local autour d’un nœud.
+
+| Entrée | Type | Requis | Description |
+|--------|------|--------|-------------|
+| `nodeId` | string | oui | ID nœud (ex. retour de `ted_query`) |
+| `depth` | number | non | Défaut 1 |
+
+**Retour** : `{ nodes, edges }`.
+
+**Usage agent** : enrichir le contexte LLM avec les relations (compte → transaction → catégorie).
+
+#### `ted_cypher`
+
+Requête Cypher sur LadybugDB (si moteur `ladybug`).
+
+| Entrée | Type | Requis |
+|--------|------|--------|
+| `query` | string | oui |
+
+**Exemple** : `MATCH (n:GraphNode) WHERE n.label = 'Transaction' RETURN n LIMIT 5`
+
+**Retour** : résultat brut LadybugDB (JSON).
+
+#### `ted_justify`
+
+Citations sources pour ancrer une réponse.
+
+| Entrée | Type | Requis |
+|--------|------|--------|
+| `question` | string | oui |
+| `draft` | string | non |
+
+**Retour** : `JustifyResult` (identique à `POST /api/justify`).
+
+**Usage agent** : boucle human-in-the-loop — proposer une réponse puis la justifier avant validation utilisateur.
+
+### Scénario type agent
+
+1. `ted_status` — index à jour ?
+2. `ted_analyze` — si stale ou après import bancaire
+3. `ted_query` — « restaurant Q2 » / « TVA 44566 »
+4. `ted_context` — explorer le nœud transaction ou règle trouvé
+5. `ted_justify` — valider la réponse proposée avec citations
+
+---
 
 ## Publication npm
 
-Le package est publié sur [npm](https://www.npmjs.com/package/ted) via GitHub Actions :
+Package : **[tax-expert-documents](https://www.npmjs.com/package/tax-expert-documents)** sur npm.
 
-- **CI** (`.github/workflows/ci.yml`) — build + `npm pack --dry-run` sur chaque push/PR `main` ; artefact `.tgz` téléchargeable
-- **Publish** (`.github/workflows/publish-npm.yml`) — `npm publish` à la création d'une **GitHub Release**
+```bash
+npm install -g tax-expert-documents
+```
 
-Configurer le secret **`NPM_TOKEN`** dans les paramètres du repo (token npm avec permission publish). Publier une release en incrémentant `version` dans `ted/package.json`.
+### CI / publish (GitHub Actions)
+
+| Workflow | Déclencheur | Résultat |
+|----------|-------------|----------|
+| **CI** (`.github/workflows/ci.yml`) | push/PR `main` | build + artefact `*.tgz` (90 jours) |
+| **Publish** (`.github/workflows/publish-npm.yml`) | Release GitHub ou `workflow_dispatch` | `npm publish` + artefact |
+
+**Première publication** :
+
+1. Créer un [token npm](https://www.npmjs.com/settings/~youruser/tokens) (type *Publish*).
+2. Ajouter le secret **`NPM_TOKEN`** dans [Settings → Secrets](https://github.com/antonymarion/ted/settings/secrets/actions) du repo.
+3. Lancer **Actions → Publish npm → Run workflow** (ou créer une GitHub Release).
 
 Installation depuis un artefact CI :
 
 ```bash
-npm install -g ./ted-0.1.0.tgz
+npm install -g ./tax-expert-documents-0.1.0.tgz
 ```
 
 ## Licence

@@ -34,15 +34,15 @@ Cela permet de naviguer entre une règle comptable, la section qui la décrit, l
 ## Démarrage rapide
 
 ```bash
-npm install -g ted
+npm install -g tax-expert-documents
 ted analyze
 ted serve
 ```
 
 - **`ted analyze`** — met à jour **data.gouv.fr**, synchronise les **comptes** (Qonto…) et reconstruit le graphe dans `~/.ted/index`
-- **`ted serve`** — UI graphe (force-graph) + API REST + MCP HTTP sur le port 3847
+- **`ted serve`** — UI graphe + API REST + MCP HTTP sur **un seul port** (3847 par défaut)
 
-Configuration comptes : `~/.ted/company.json` + `~/.ted/.env` (voir [ted/README.md](ted/README.md)).
+Package npm : [tax-expert-documents](https://www.npmjs.com/package/tax-expert-documents) (CLI `ted`). API, MCP et ports : [ted/README.md](ted/README.md).
 
 Documentation complète : [ted/README.md](ted/README.md).
 

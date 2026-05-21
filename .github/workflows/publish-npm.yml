@@ -51,14 +51,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ted-npm-release
-          path: ted/ted-*.tgz
+          path: ted/*.tgz
           retention-days: 365
 
       - name: Attach tarball to GitHub Release
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: ted/ted-*.tgz
+          files: ted/*.tgz
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

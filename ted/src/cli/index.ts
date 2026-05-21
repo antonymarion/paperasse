@@ -4,6 +4,7 @@ import { GraphStore } from '../core/graph/store.js';
 import { indexDir } from '../core/paths.js';
 import { startMcpStdio } from '../mcp/server.js';
 import { startServe } from '../serve/api.js';
+import { packageVersion } from '../core/version.js';
 
 export function buildCli(): Command {
   const program = new Command();
@@ -13,7 +14,7 @@ export function buildCli(): Command {
     .description(
       'TED — graphe de connaissances fiscal/comptable (skills Markdown, data.gouv.fr, Ladybug, MCP)',
     )
-    .version('0.1.0');
+    .version(packageVersion());
 
   program
     .command('analyze')

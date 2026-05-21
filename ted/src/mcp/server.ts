@@ -7,10 +7,11 @@ import {
 import type { GraphStore } from '../core/graph/store.js';
 import { justifyAnswer } from '../core/search/justify.js';
 import { runAnalyze } from '../cli/analyze.js';
+import { packageVersion } from '../core/version.js';
 
 export function createTedMcpServer(store: GraphStore): Server {
   const server = new Server(
-    { name: 'ted', version: '0.1.0' },
+    { name: 'ted', version: packageVersion() },
     { capabilities: { tools: {} } },
   );
 
