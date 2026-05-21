@@ -270,10 +270,10 @@ curl "http://127.0.0.1:3847/api/graph?layer=accounts"
 # 3. Recherche
 curl "http://127.0.0.1:3847/api/query?q=TVA&layer=knowledge"
 
-# 4. Justification (skills)
+# 4. Justification (skills) — question fiscale/comptable élaborée
 curl -X POST http://127.0.0.1:3847/api/justify \
   -H "Content-Type: application/json" \
-  -d '{"question":"TVA déductible repas client","layer":"knowledge"}'
+  -d '{"question":"SASU à l'\''IS : l'\''associé unique veut se verser un acompte sur dividendes en cours d'\''exercice alors que le compte 110000 est créditeur — quelles conditions (test de liquidité, PV), écritures et retenue flat tax ?","layer":"knowledge"}'
 
 # 5. Justification (dépenses Qonto)
 curl -X POST http://127.0.0.1:3847/api/justify \
@@ -378,8 +378,8 @@ Justifie une réponse agent avec citations depuis l’index.
 
 ```json
 {
-  "question": "Puis-je déduire la TVA sur ce repas client ?",
-  "draft": "Oui, TVA déductible à 20 %."
+  "question": "SASU à l'IS : l'associé unique veut se verser un acompte sur dividendes en cours d'exercice alors que le compte 110000 est créditeur de 45 k€ — quelles conditions légales (test de liquidité, PV d'AGO), écritures comptables et retenue à la source flat tax s'appliquent ?",
+  "draft": "Il suffit de passer une écriture 457 / 512 et la flat tax est due au PFU 30 %."
 }
 ```
 
@@ -532,7 +532,7 @@ Citations sources pour ancrer une réponse.
 
 1. `ted_status` — index à jour ?
 2. `ted_analyze` — si stale ou après import bancaire
-3. `ted_query` — « restaurant Q2 » / « TVA 44566 »
+3. `ted_query` — « acompte dividendes SASU » / « test liquidité 110 » / « flat tax distribution »
 4. `ted_context` — explorer le nœud transaction ou règle trouvé
 5. `ted_justify` — valider la réponse proposée avec citations
 
