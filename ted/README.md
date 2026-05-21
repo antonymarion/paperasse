@@ -430,25 +430,55 @@ Package : **[tax-expert-documents](https://www.npmjs.com/package/tax-expert-docu
 npm install -g tax-expert-documents
 ```
 
-### CI / publish (GitHub Actions)
+### Trusted Publishing (recommandé)
+
+La CI publie via **OIDC GitHub Actions** — pas de token npm *write* longue durée à renouveler.
+
+**Prérequis npm CLI ≥ 11.5.1** (installé automatiquement dans le workflow).
+
+#### Étape 1 — Première publication (une seule fois)
+
+Le *Trusted Publisher* se configure sur la fiche package npm, qui doit exister :
+
+1. Créer un **Granular Access Token** (write, Bypass 2FA, 90 j) → secret GitHub **`NPM_TOKEN`**
+2. **Actions → Publish npm → Run workflow** avec **`use_legacy_token`** coché
+3. Le package `tax-expert-documents@0.1.0` apparaît sur npm
+
+#### Étape 2 — Configurer le Trusted Publisher
+
+Sur https://www.npmjs.com/package/tax-expert-documents → **Settings** → **Trusted publishing** :
+
+| Champ | Valeur |
+|-------|--------|
+| Provider | **GitHub Actions** |
+| Repository | `antonymarion/ted` |
+| Workflow filename | `publish-npm.yml` |
+| Environment | _(vide)_ |
+
+Enregistrer. Les publishes suivants n’utilisent **plus** `NPM_TOKEN`.
+
+#### Étape 3 — Publier
+
+| Déclencheur | Action |
+|-------------|--------|
+| Tag `v*` | `git tag v0.1.1 && git push origin v0.1.1` |
+| Release GitHub | Créer une release sur le tag |
+| Manuel | **Actions → Publish npm → Run workflow** |
+
+Le workflow `publish-npm.yml` utilise `permissions.id-token: write` et `npm publish` **sans** `NODE_AUTH_TOKEN`. La provenance npm est générée automatiquement.
+
+#### Sécurité renforcée (optionnel, après étape 2)
+
+Package npm → **Settings → Publishing access** → *Require 2FA and disallow tokens*.
+
+### CI / workflows
 
 | Workflow | Déclencheur | Résultat |
 |----------|-------------|----------|
-| **CI** (`.github/workflows/ci.yml`) | push/PR `main` | build + artefact `*.tgz` (90 jours) |
-| **Publish** (`.github/workflows/publish-npm.yml`) | Release GitHub ou `workflow_dispatch` | `npm publish` + artefact |
+| **CI** (`ci.yml`) | push/PR `main` | build + artefact `*.tgz` (90 jours) |
+| **Publish** (`publish-npm.yml`) | tag `v*`, Release, `workflow_dispatch` | `npm publish` OIDC + artefact |
 
-**Première publication** :
-
-1. Créer un [token npm](https://www.npmjs.com/settings/~youruser/tokens) :
-   - type **Granular Access Token** ou **Classic Automation** (CI uniquement, pas de 2FA à chaque publish) ;
-   - permission **Publish** sur le package `tax-expert-documents` (ou scope *All packages* si premier publish) ;
-   - durée de vie : **90 jours max** (npm impose 7 jours par défaut pour les tokens *write* — choisir explicitement 90 j dans les options avancées).
-2. Ajouter le secret **`NPM_TOKEN`** dans [Settings → Secrets](https://github.com/antonymarion/ted/settings/secrets/actions) du repo GitHub.
-3. Lancer **Actions → Publish npm → Run workflow** (ou créer une GitHub Release).
-
-> **Renouvellement** : planifier le renouvellement du token avant expiration (rappel calendrier à J-14). Le workflow échouera avec `401`/`403` si le token est expiré — regénérer le token npm et mettre à jour `NPM_TOKEN` sur GitHub.
-
-La publication utilise **`--provenance`** (attestation GitHub ↔ npm) ; le token reste nécessaire pour l’authentification registry.
+**Fallback première publication** : `workflow_dispatch` + option `use_legacy_token` + secret `NPM_TOKEN`.
 
 Installation depuis un artefact CI :
 
