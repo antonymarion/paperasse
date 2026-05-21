@@ -64,7 +64,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to npm
-        if: github.event.inputs.skip_npm_publish != 'true'
+        if: |
+          github.event.inputs.skip_npm_publish != 'true' &&
+          (github.event_name == 'release' || github.event_name == 'workflow_dispatch')
         run: npm publish --provenance --access public --tag "${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || 'latest' }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
