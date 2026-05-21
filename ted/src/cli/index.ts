@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { runAnalyze, runStatus } from './analyze.js';
+import { runSync } from './sync.js';
 import { GraphStore } from '../core/graph/store.js';
 import { indexDir } from '../core/paths.js';
 import { startMcpStdio } from '../mcp/server.js';
@@ -15,6 +16,20 @@ export function buildCli(): Command {
       'TED — graphe de connaissances fiscal/comptable (skills Markdown, data.gouv.fr, Ladybug, MCP)',
     )
     .version(packageVersion());
+
+  program
+    .command('sync')
+    .description(
+      'Synchroniser Qonto, Stripe… vers ~/.ted/data/transactions (paperasse / integrations)',
+    )
+    .option('--clear', 'Vider le cache transactions avant la synchronisation')
+    .option('--analyze', 'Reconstruire le graphe après la sync (sans re-sync API)')
+    .action(async (opts) => {
+      await runSync({
+        clearCache: opts.clear,
+        analyze: opts.analyze,
+      });
+    });
 
   program
     .command('analyze')

@@ -1,0 +1,374 @@
+openapi: 3.1.0
+info:
+  title: TED — Tax Expert Documents API
+  description: |
+    **TED** (Tax Expert Documents) expose une API REST locale lorsque vous lancez `ted serve`.
+    Elle alimente l’UI graphe, les agents IA (MCP) et vos intégrations.
+
+    **Base URL** : `http://127.0.0.1:3847` (port par défaut, localhost uniquement)
+
+    ## Démarrage
+
+    ```bash
+    npm install -g tax-expert-documents
+    ted analyze          # indexe skills + data.gouv.fr + comptes
+    ted sync --analyze   # ou : sync Qonto puis graphe
+    ted serve            # UI + API + Swagger sur :3847
+    ```
+
+    ## Deux graphes complémentaires
+
+    | Couche `layer` | Contenu | Usage typique |
+    |----------------|---------|---------------|
+    | `knowledge` | Skills paperasse, open data data.gouv.fr | TVA, PCG, règles fiscales |
+    | `accounts` | Qonto : transactions, catégories, comptes | Dépenses, libellés, montants |
+
+    ## Parcours API recommandé
+
+    1. **`GET /api/status`** — vérifier que l’index existe (`skillCount`, `transactionCount`…)
+    2. **`GET /api/graph?layer=knowledge`** ou **`?layer=accounts`** — récupérer le sous-graphe
+    3. **`GET /api/query?q=TVA&layer=knowledge`** — recherche textuelle dans les nœuds
+    4. **`GET /api/context/{nodeId}?depth=2&layer=…`** — sous-graphe de voisinage
+    5. **`POST /api/justify`** — justification avec citations et raisonnement (`layer` = graphe actif)
+
+    ## UI web
+
+    - Graphe interactif : `http://127.0.0.1:3847/`
+    - **Swagger (cette page)** : `http://127.0.0.1:3847/api/docs`
+    - OpenAPI brut : `GET /api/openapi.yaml`
+
+    ## MCP
+
+    Même port : `POST http://127.0.0.1:3847/mcp` (transport HTTP streamable).
+    Alternative stdio : `ted mcp` (Cursor / Claude Desktop).
+  version: 0.2.0
+  contact:
+    name: TED
+    url: https://www.npmjs.com/package/tax-expert-documents
+servers:
+  - url: http://127.0.0.1:3847
+    description: Serveur local (port par défaut)
+tags:
+  - name: index
+    description: |
+      État de l’index et export du graphe sérialisé.
+      Utilisez `layer` pour séparer savoir métier et transactions bancaires.
+  - name: search
+    description: |
+      Recherche par mots-clés et extraction de sous-graphes de contexte.
+      Indispensable avant une justification ciblée.
+  - name: agent
+    description: |
+      Justification de réponses agent avec citations, extraits skills et raisonnement pas à pas.
+      `layer=knowledge` → règles comptables ; `layer=accounts` → transactions Qonto.
+paths:
+  /api/status:
+    get:
+      tags: [index]
+      summary: État de l'index local
+      description: |
+        Retourne les métadonnées du dernier `ted analyze` : nombre de skills, documents,
+        transactions, datasets data.gouv.fr, moteur de persistance (LadybugDB ou JSON).
+      operationId: getStatus
+      responses:
+        '200':
+          description: Métadonnées IndexMeta ou index absent
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/IndexMeta'
+                  - $ref: '#/components/schemas/IndexAbsent'
+  /api/graph:
+    get:
+      tags: [index]
+      summary: Graphe sérialisé (skills ou comptes)
+      description: |
+        Exporte les nœuds et arêtes du graphe indexé.
+
+        - **`layer=knowledge`** (défaut UI savoir métier) : skills, documents, sections, concepts, datasets
+        - **`layer=accounts`** : société, Qonto, comptes, transactions, catégories bancaires
+        - **`layer=all`** : graphe complet fusionné
+      operationId: getGraph
+      parameters:
+        - name: layer
+          in: query
+          schema:
+            type: string
+            enum: [knowledge, accounts, all]
+            default: knowledge
+          description: Sous-graphe à retourner
+      responses:
+        '200':
+          description: Nœuds et arêtes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraph'
+  /api/query:
+    get:
+      tags: [search]
+      summary: Recherche textuelle dans les nœuds
+      description: |
+        Scoring simple par tokens (insensible aux accents).
+
+        Exemples :
+        - `q=TVA&layer=knowledge` → concepts et sections fiscales
+        - `q=restaurant&layer=accounts` → transactions Qonto correspondantes
+      operationId: queryNodes
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Requête (ex. TVA, restaurant, 6257)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: layer
+          in: query
+          schema:
+            type: string
+            enum: [knowledge, accounts, all]
+            default: all
+      responses:
+        '200':
+          description: Résultats triés par score
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/QueryHit'
+  /api/context/{nodeId}:
+    get:
+      tags: [search]
+      summary: Sous-graphe autour d'un nœud
+      description: |
+        Expansion par profondeur (`depth`) à partir d’un `nodeId` retourné par `/api/query`
+        ou visible dans l’UI. Filtrer avec `layer` pour rester dans le graphe skills ou comptes.
+      operationId: getContext
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identifiant nœud (URL-encodé, ex. `Concept%3Atva-deductible`)
+        - name: depth
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+            maximum: 5
+        - name: layer
+          in: query
+          schema:
+            type: string
+            enum: [knowledge, accounts, all]
+            default: all
+      responses:
+        '200':
+          description: Sous-graphe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeGraph'
+  /api/justify:
+    post:
+      tags: [agent]
+      summary: Justifier une réponse avec citations et raisonnement
+      description: |
+        Recherche des sources dans le graphe, construit un **raisonnement** (étapes)
+        et une **explication** en prose.
+
+        - **`layer: knowledge`** — skills Markdown + open data (défaut)
+        - **`layer: accounts`** — transactions et catégories Qonto synchronisées
+
+        Correspond au bouton **Justifier** de l’UI (Entrée dans le champ question).
+      operationId: justifyAnswer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JustifyRequest'
+            examples:
+              knowledge:
+                summary: Question fiscale (skills)
+                value:
+                  question: Puis-je déduire la TVA sur un repas client ?
+                  draft: Oui, TVA déductible à 20 %
+                  layer: knowledge
+              accounts:
+                summary: Dépenses Qonto
+                value:
+                  question: restaurant
+                  layer: accounts
+      responses:
+        '200':
+          description: Citations, reasoning et explanation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JustifyResult'
+        '400':
+          description: question manquante
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  schemas:
+    IndexAbsent:
+      type: object
+      properties:
+        indexed:
+          type: boolean
+          example: false
+    IndexMeta:
+      type: object
+      properties:
+        indexPath:
+          type: string
+        skillsRoot:
+          type: string
+        indexedAt:
+          type: string
+          format: date-time
+        skillCount:
+          type: integer
+        documentCount:
+          type: integer
+        nodeCount:
+          type: integer
+        edgeCount:
+          type: integer
+        datagouvDatasets:
+          type: integer
+        accountCount:
+          type: integer
+        transactionCount:
+          type: integer
+        providersSynced:
+          type: array
+          items:
+            type: string
+        providersCached:
+          type: array
+          items:
+            type: string
+        engine:
+          type: string
+          enum: [ladybug, json-fallback]
+    GraphNode:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        name:
+          type: string
+        properties:
+          type: object
+          additionalProperties: true
+    GraphEdge:
+      type: object
+      properties:
+        id:
+          type: string
+        from:
+          type: string
+        to:
+          type: string
+        label:
+          type: string
+    KnowledgeGraph:
+      type: object
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/GraphEdge'
+    QueryHit:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        name:
+          type: string
+        score:
+          type: number
+        excerpt:
+          type: string
+        skill:
+          type: string
+        path:
+          type: string
+    JustifyRequest:
+      type: object
+      required: [question]
+      properties:
+        question:
+          type: string
+          description: Question ou mots-clés de recherche
+        draft:
+          type: string
+          description: Proposition de l’agent à confronter aux sources (optionnel)
+        layer:
+          type: string
+          enum: [knowledge, accounts]
+          default: knowledge
+          description: Graphe cible (skills ou transactions Qonto)
+    JustifyResult:
+      type: object
+      properties:
+        question:
+          type: string
+        summary:
+          type: string
+        explanation:
+          type: string
+          description: Synthèse en prose
+        reasoning:
+          type: array
+          items:
+            type: string
+          description: Étapes du raisonnement
+        citations:
+          type: array
+          items:
+            type: object
+            properties:
+              nodeId:
+                type: string
+              label:
+                type: string
+              name:
+                type: string
+              excerpt:
+                type: string
+              snippet:
+                type: string
+              skill:
+                type: string
+              document:
+                type: string
+    Error:
+      type: object
+      properties:
+        error:
+          type: string

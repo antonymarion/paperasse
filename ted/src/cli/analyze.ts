@@ -15,10 +15,13 @@ import {
 import { loadCachedTransactions } from '../connectors/qonto.js';
 import { loadCompanyConfig } from '../connectors/company.js';
 import type { IndexMeta } from '../core/types.js';
+import { tagGraphLayers } from '../core/graph/layer.js';
 
 export interface AnalyzeOptions {
   datagouv?: boolean;
   accounts?: boolean;
+  /** Ingère ~/.ted/data/transactions sans re-synchroniser les connecteurs. */
+  ingestTransactions?: boolean;
   datagouvQuery?: string;
 }
 
@@ -34,12 +37,11 @@ export async function runAnalyze(opts: AnalyzeOptions = {}): Promise<IndexMeta> 
   let accountCount = 0;
   let transactionCount = 0;
   let providersSynced: string[] = [];
+  let providersCached: string[] = [];
 
   if (opts.datagouv !== false) {
     try {
-      const datasets = await fetchDatagouvDatasets(
-        opts.datagouvQuery ?? 'fiscalité impôt comptabilité',
-      );
+      const datasets = await fetchDatagouvDatasets(opts.datagouvQuery);
       datagouvCount = datasets.length;
       graph = mergeGraphs(graph, datasetsToGraph(datasets));
     } catch (err) {
@@ -47,13 +49,22 @@ export async function runAnalyze(opts: AnalyzeOptions = {}): Promise<IndexMeta> 
     }
   }
 
-  if (opts.accounts !== false) {
+  const ingestAccounts = opts.accounts !== false || opts.ingestTransactions === true;
+  if (ingestAccounts) {
     try {
-      const sync = await syncAccountData();
-      providersSynced = sync.providers;
-      accountCount = sync.accountCount;
-      transactionCount = sync.transactionCount;
-      for (const w of sync.warnings) console.warn(`[ted] ${w}`);
+      if (opts.accounts !== false) {
+        const sync = await syncAccountData();
+        providersSynced = sync.providersSynced;
+        providersCached = sync.providersCached;
+        accountCount = sync.accountCount;
+        transactionCount = sync.transactionCount;
+        for (const w of sync.warnings) console.warn(`[ted] ${w}`);
+      } else {
+        const txs = loadCachedTransactions();
+        providersCached = [...new Set(txs.map((t) => t.source))];
+        accountCount = new Set(txs.map((t) => `${t.source}:${t.accountId}`)).size;
+        transactionCount = txs.length;
+      }
 
       const company = loadCompanyConfig();
       const txs = loadCachedTransactions();
@@ -76,6 +87,8 @@ export async function runAnalyze(opts: AnalyzeOptions = {}): Promise<IndexMeta> 
   transactionCount =
     transactionCount || graph.nodes.filter((n) => n.label === 'Transaction').length;
 
+  tagGraphLayers(graph);
+
   const meta: IndexMeta = {
     indexPath: indexDir(),
     skillsRoot,
@@ -88,6 +101,7 @@ export async function runAnalyze(opts: AnalyzeOptions = {}): Promise<IndexMeta> 
     accountCount,
     transactionCount,
     providersSynced,
+    providersCached,
     engine: store.engine,
   };
 
@@ -97,7 +111,8 @@ export async function runAnalyze(opts: AnalyzeOptions = {}): Promise<IndexMeta> 
   console.log(`  Skills source: ${skillsRoot}`);
   console.log(`  Skills: ${skillCount}, Documents: ${documentCount}`);
   console.log(`  Comptes: ${accountCount}, Transactions: ${transactionCount}`);
-  console.log(`  Fournisseurs: ${providersSynced.join(', ') || '—'}`);
+  console.log(`  Sync API: ${providersSynced.join(', ') || '—'}`);
+  console.log(`  Cache local: ${providersCached.join(', ') || '—'}`);
   console.log(`  Nœuds: ${meta.nodeCount}, Arêtes: ${meta.edgeCount}`);
   console.log(`  data.gouv.fr: ${datagouvCount} jeux de données`);
   console.log(`  Moteur: ${meta.engine}`);

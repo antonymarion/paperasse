@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { GraphEdge, GraphNode, IndexMeta, KnowledgeGraph, QueryHit } from '../types.js';
+import { filterGraphByLayer, type GraphLayer, inferNodeLayer } from './layer.js';
+import { normalizeForSearch, searchTokens } from '../search/normalize.js';
 
 interface LadybugPrepared {}
 interface LadybugConnection {
@@ -141,7 +143,12 @@ export class GraphStore {
     }
   }
 
-  loadGraphJson(): KnowledgeGraph {
+  loadGraphJson(layer: GraphLayer = 'all'): KnowledgeGraph {
+    const graph = JSON.parse(fs.readFileSync(this.jsonPath, 'utf-8')) as KnowledgeGraph;
+    return filterGraphByLayer(graph, layer);
+  }
+
+  loadFullGraphJson(): KnowledgeGraph {
     return JSON.parse(fs.readFileSync(this.jsonPath, 'utf-8')) as KnowledgeGraph;
   }
 
@@ -151,18 +158,24 @@ export class GraphStore {
     return JSON.parse(fs.readFileSync(p, 'utf-8')) as IndexMeta;
   }
 
-  async query(text: string, limit = 12): Promise<QueryHit[]> {
-    const graph = this.loadGraphJson();
-    const q = text.toLowerCase();
-    const tokens = q.split(/\s+/).filter(Boolean);
+  async query(
+    text: string,
+    limit = 12,
+    opts: { layer?: GraphLayer } = {},
+  ): Promise<QueryHit[]> {
+    const graph = this.loadGraphJson(opts.layer ?? 'all');
+    const qNorm = normalizeForSearch(text);
+    const tokens = searchTokens(text);
+    if (tokens.length === 0 && qNorm.length >= 2) tokens.push(qNorm);
 
     const scored = graph.nodes.map((n) => {
-      const hay = `${n.name} ${n.label} ${JSON.stringify(n.properties)}`.toLowerCase();
+      const hay = normalizeForSearch(`${n.name} ${n.label} ${JSON.stringify(n.properties)}`);
       let score = 0;
       for (const t of tokens) {
         if (hay.includes(t)) score += 1;
       }
-      if (hay.includes(q)) score += 3;
+      if (qNorm.length >= 3 && hay.includes(qNorm)) score += 4;
+      if (inferNodeLayer(n) === 'knowledge' && opts.layer !== 'accounts') score += 0.5;
       return {
         id: n.id,
         label: n.label,
@@ -187,8 +200,8 @@ export class GraphStore {
     throw new Error('Cypher nécessite LadybugDB (index local). Réessayez après npm install lbug.');
   }
 
-  context(nodeId: string, depth = 1): KnowledgeGraph {
-    const graph = this.loadGraphJson();
+  context(nodeId: string, depth = 1, layer: GraphLayer = 'all'): KnowledgeGraph {
+    const graph = this.loadFullGraphJson();
     const ids = new Set<string>([nodeId]);
     for (let d = 0; d < depth; d++) {
       for (const e of graph.edges) {
@@ -196,10 +209,13 @@ export class GraphStore {
         if (ids.has(e.to)) ids.add(e.from);
       }
     }
-    return {
-      nodes: graph.nodes.filter((n) => ids.has(n.id)),
-      edges: graph.edges.filter((e) => ids.has(e.from) && ids.has(e.to)),
-    };
+    return filterGraphByLayer(
+      {
+        nodes: graph.nodes.filter((n) => ids.has(n.id)),
+        edges: graph.edges.filter((e) => ids.has(e.from) && ids.has(e.to)),
+      },
+      layer,
+    );
   }
 }
 

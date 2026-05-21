@@ -31,9 +31,24 @@
     }
     header h1 { font-size: 1.1rem; margin: 0; }
     header span { color: var(--muted); font-size: 0.85rem; }
-    main { display: grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 57px); }
+    main {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      min-height: calc(100vh - 57px);
+    }
     aside, section { padding: 1rem; overflow: auto; }
-    aside { border-right: 1px solid var(--border); background: var(--panel); }
+    aside {
+      border-right: 1px solid var(--border);
+      background: var(--panel);
+      position: relative;
+      z-index: 2;
+    }
+    section {
+      min-width: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
     input, textarea, button {
       width: 100%;
       padding: 0.6rem 0.75rem;
@@ -50,6 +65,44 @@
       font-weight: 600;
     }
     button.secondary { background: transparent; border: 1px solid var(--border); }
+    button.secondary.active { border-color: var(--accent); color: var(--accent); }
+    .layer-tabs {
+      display: flex;
+      gap: 0.35rem;
+      margin-bottom: 0.75rem;
+    }
+    .layer-tabs button {
+      flex: 1;
+      margin-bottom: 0;
+      font-size: 0.78rem;
+      padding: 0.45rem 0.5rem;
+    }
+    .justification-panel {
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+      max-height: 42vh;
+      overflow: auto;
+    }
+    .justification-panel h3 {
+      margin: 0 0 0.5rem;
+      font-size: 0.9rem;
+    }
+    .reasoning-step {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+      padding-left: 0.75rem;
+      border-left: 2px solid var(--border);
+    }
+    .explanation {
+      background: rgba(59, 130, 246, 0.08);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-size: 0.85rem;
+      margin-bottom: 0.75rem;
+    }
     .stats { font-size: 0.8rem; color: var(--muted); line-height: 1.6; }
     .hit {
       padding: 0.75rem;
@@ -61,11 +114,19 @@
     .hit:hover, .hit.active { border-color: var(--accent); }
     .hit .label { font-size: 0.7rem; color: var(--accent); text-transform: uppercase; }
     #graph-container {
-      height: calc(100vh - 120px);
+      flex: 1;
+      width: 100%;
+      height: calc(100vh - 180px);
       min-height: 420px;
       border: 1px solid var(--border);
       border-radius: 8px;
       background: #0a0e14;
+      overflow: hidden;
+      position: relative;
+      isolation: isolate;
+    }
+    #graph-container canvas {
+      display: block;
     }
     .legend { font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem; }
     .citations { margin-top: 1rem; }
@@ -89,21 +150,27 @@
     <aside>
       <div class="stats" id="status">Chargement…</div>
       <hr style="border-color: var(--border)" />
-      <input id="query" placeholder="Rechercher (ex: TVA, 2033, dividendes)" />
-      <button id="search">Rechercher</button>
-      <button class="secondary" id="justify-btn">Justifier une réponse</button>
+      <input id="search-query" type="search" autocomplete="off" placeholder="Question fiscale ou comptable (Entrée pour justifier)" />
+      <button type="button" id="justify-btn">Justifier</button>
       <textarea id="draft" rows="3" placeholder="Brouillon de réponse agent (optionnel)"></textarea>
       <div id="results"></div>
+      <div class="justification-panel" id="justification-panel">
+        <h3>Justification &amp; raisonnement</h3>
+        <div id="citations"><span style="color:var(--muted);font-size:0.85rem">Posez une question puis « Justifier une réponse ».</span></div>
+      </div>
     </aside>
     <section>
+      <div class="layer-tabs">
+        <button type="button" class="secondary active" id="layer-knowledge" data-layer="knowledge">Savoir métier · skills &amp; open data</button>
+        <button type="button" class="secondary" id="layer-accounts" data-layer="accounts">Comptes · Qonto &amp; transactions</button>
+      </div>
       <h2 style="margin-top:0;font-size:1rem;">Visualisation du graphe</h2>
       <div id="graph-container"></div>
-      <p class="legend">Cliquez un nœud pour centrer · molette pour zoomer · glisser pour déplacer</p>
-      <div class="citations" id="citations"></div>
+      <p class="legend" id="graph-legend">Savoir métier : skills &amp; open data · Comptes : taille ∝ |montant| · vert = encaissement · Entrée = justifier</p>
     </section>
   </main>
   <script src="https://unpkg.com/d3@7"></script>
-  <script src="https://unpkg.com/force-graph"></script>
+  <script src="https://unpkg.com/force-graph@1.51.4/dist/force-graph.min.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

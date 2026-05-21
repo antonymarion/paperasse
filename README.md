@@ -39,7 +39,10 @@ ted analyze
 ted serve
 ```
 
+Pour **synchroniser vos comptes** (Qonto, Stripe…) et enrichir le graphe avec vos transactions, configurez d’abord `~/.ted/.env` (clés API) et `~/.ted/company.json` (société, exercice fiscal) — voir [Configuration comptes](ted/README.md#configuration-comptes-ted) dans la doc TED.
+
 - **`ted analyze`** — met à jour **data.gouv.fr**, synchronise les **comptes** (Qonto…) et reconstruit le graphe dans `~/.ted/index`
+- **`ted sync`** — synchronisation API seule vers `~/.ted/data/transactions/`
 - **`ted serve`** — UI graphe + API REST + MCP HTTP sur **un seul port** (3847 par défaut)
 
 Package npm : [tax-expert-documents](https://www.npmjs.com/package/tax-expert-documents) (CLI `ted`). API, MCP et ports : [ted/README.md](ted/README.md).

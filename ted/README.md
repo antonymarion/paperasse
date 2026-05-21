@@ -96,10 +96,16 @@ node bin/ted.js --version
 
 | Commande | Description |
 |----------|-------------|
+| `ted sync` | Synchronise **Qonto**, **Stripe**… vers `~/.ted/data/transactions/` (connecteurs paperasse) |
 | `ted analyze` | Met à jour **data.gouv.fr**, synchronise les **comptes** (Qonto…) et reconstruit le graphe (`~/.ted/index`) |
 | `ted status` | Métadonnées de l'index (JSON) |
 | `ted serve` | UI graphe + API REST + MCP HTTP |
 | `ted mcp` | MCP stdio (Cursor/Claude) — aucun port réseau |
+
+Options `sync` :
+
+- `--clear` — vide `~/.ted/data/transactions/` avant la synchronisation
+- `--analyze` — reconstruit le graphe depuis le cache (sans rappeler les APIs)
 
 Options `analyze` :
 
@@ -107,37 +113,101 @@ Options `analyze` :
 - `--no-accounts` — sans synchronisation des comptes bancaires
 - `--datagouv-query <q>` — requête API data.gouv.fr personnalisée
 
+Connecteurs alignés sur **paperasse** (`integrations/` sur la branche `feat/integrations-stripe-qonto`) : **Qonto** (transactions bancaires), **Stripe** (balance transactions). **Dougs** n’a pas de connecteur fetch dans ce dépôt — import manuel JSON si besoin.
+
 Options `serve` :
 
 - `-p, --port <n>` — port HTTP (défaut **3847**)
 
 ### Configuration comptes (`~/.ted/`)
 
+TED stocke **vos données personnelles** (index graphe, cache transactions, secrets API) dans un répertoire utilisateur, par défaut **`~/.ted/`** (sur Windows : `%USERPROFILE%\.ted\`). Ce répertoire est **distinct** du dépôt git ou du `.env` à la racine d’un projet : TED ne lit **pas** automatiquement le `.env` de votre workspace.
+
+Pour synchroniser Qonto, Stripe ou alimenter le graphe avec vos transactions, deux fichiers sont à prévoir :
+
+| Fichier | Obligatoire ? | Rôle |
+|---------|---------------|------|
+| **`~/.ted/.env`** | **Oui** pour toute sync API | Secrets (clés API). Jamais versionné. |
+| **`~/.ted/company.json`** | Recommandé | Identité société, exercice fiscal, connecteurs activés. |
+
+Sans ces fichiers, `ted sync` et la partie « comptes » de `ted analyze` ne contactent **aucune API** : le graphe ne contiendra que skills + open data (et d’éventuels JSON déjà présents dans le cache).
+
+#### Pourquoi `~/.ted/.env` ?
+
+Les connecteurs (Qonto, Stripe…) appellent des APIs tierces avec des **identifiants secrets**. TED les charge au démarrage de `ted sync` / `ted analyze` depuis **`~/.ted/.env`** uniquement :
+
+- **`QONTO_ID`** et **`QONTO_API_SECRET`** — clé API Qonto (*Paramètres → Intégrations → Clé API*). En-tête HTTP : `Authorization: {id}:{secret}`.
+- **`STRIPE_SECRET`** (ou autre nom référencé par `env_key` dans `company.json`) — clé secrète Stripe.
+
+Exemple `~/.ted/.env` :
+
+```env
+QONTO_ID=mon-organisation-xxxx
+QONTO_API_SECRET=secret_api_qonto
+STRIPE_SECRET=sk_live_...
+```
+
+> **Attention** : un `.env` à la racine de votre projet (ex. `comptable agentique/.env`) **n’est pas lu** par défaut. Copiez les variables pertinentes vers `~/.ted/.env`, ou exportez-les dans votre shell, ou pointez `TED_HOME` vers un autre dossier contenant son propre `.env`.
+
+#### Pourquoi `~/.ted/company.json` ?
+
+Ce fichier décrit **quelle société** indexer et **comment** filmer la synchronisation. Il ne contient pas de secrets.
+
+| Champ | Utilité |
+|-------|---------|
+| `name`, `siren`, `legal_form` | Nœud **Company** dans le graphe |
+| `fiscal_year.start` / `end` | Fenêtre de récupération des transactions (Qonto : `updated_at_from` / `updated_at_to`) |
+| `qonto.enabled` | `false` désactive Qonto même si les clés sont dans `.env` ; `true` sans clés → avertissement |
+| `stripe_accounts[]` | Liste des comptes Stripe (`id`, `name`, `env_key` pointant vers une variable du `.env`) |
+| `banks[]` | Référence comptable interne (optionnel) |
+
+Sans `company.json`, Qonto peut quand même synchroniser **si** les clés sont dans `.env`, mais la période par défaut est **l’année civile en cours** — souvent trop large ou incorrecte pour un exercice décalé.
+
+Modèle fourni avec le package : `company.example.json` (dans le repo `ted/` ou `npm root -g/tax-expert-documents/`).
+
+#### Première configuration
+
 ```bash
 mkdir -p ~/.ted
 cp "$(npm root -g)/tax-expert-documents/company.example.json" ~/.ted/company.json
-# ~/.ted/.env
-# QONTO_ID=...
-# QONTO_API_SECRET=...
-ted analyze
+# Éditer ~/.ted/company.json (nom, exercice fiscal, connecteurs)
+# Créer ~/.ted/.env avec QONTO_ID, QONTO_API_SECRET, STRIPE_SECRET=...
+ted sync --analyze
 ```
+
+Sous PowerShell (Windows) :
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.ted"
+Copy-Item ".\ted\company.example.json" "$env:USERPROFILE\.ted\company.json"
+# Éditer %USERPROFILE%\.ted\.env et company.json
+ted sync --analyze
+```
+
+#### Déroulement après configuration
+
+1. **`ted sync`** — appelle les APIs (Qonto : organisation → comptes → transactions paginées) et écrit `~/.ted/data/transactions/qonto-{slug}.json`, `stripe-{id}.json`, etc.
+2. **`ted sync --analyze`** ou **`ted analyze`** — ingère ces JSON dans le graphe (nœuds `Provider`, `Account`, `Transaction`).
+
+Vérification : `ted status` affiche `providersSynced` (API appelée lors du dernier run) et `providersCached` (sources présentes dans le cache local).
 
 `ted analyze` exécute dans l’ordre :
 
 1. **Skills Markdown** — règles métier (PCG, TVA, IS…)
 2. **data.gouv.fr** — jeux open data fiscal/comptable
-3. **Comptes rattachés** — sync Qonto si credentials présents ; ingestion des caches `~/.ted/data/transactions/*.json` (Qonto, Stripe, Dougs…)
+3. **Comptes rattachés** — sync Qonto / Stripe si credentials présents ; ingestion des caches `~/.ted/data/transactions/*.json`
 4. **Journal local** — `~/.ted/data/journal-entries.json` si présent
 
 Variables d'environnement :
 
 | Variable | Description |
 |----------|-------------|
-| `TED_HOME` | Répertoire de données (défaut : `~/.ted`) |
+| `TED_HOME` | Répertoire de données (défaut : `~/.ted`) — y placer `.env` et `company.json` |
 | `TED_SKILLS` | Racine des skills Markdown à indexer |
 | `TED_COMPANY` | Chemin vers `company.json` (défaut : `~/.ted/company.json`) |
 | `TED_JOURNAL` | Chemin vers le journal comptable JSON |
-| `QONTO_ID` / `QONTO_API_SECRET` | Identifiants API Qonto (`~/.ted/.env`) |
+| `QONTO_ID` / `QONTO_API_SECRET` | Identifiants API Qonto (dans `~/.ted/.env`) |
+| `STRIPE_SECRET` | Clé secrète Stripe (ou nom custom via `env_key` dans `company.json`) |
 
 ---
 
@@ -168,9 +238,48 @@ ted serve -p 9000  # http://127.0.0.1:9000
 
 ---
 
-## API REST
+## UI graphe (deux onglets)
+
+![Graphe savoir métier — skills & open data](docs/images/graph-knowledge.png)
+
+![Graphe comptes Qonto — communautés par catégorie](docs/images/graph-accounts.png)
+
+- **Savoir métier** : skills paperasse, open data, justification fiscale/comptable
+- **Comptes** : transactions Qonto, taille des nœuds ∝ montant, couleur par catégorie
+
+## API REST & Swagger
 
 Base URL : `http://127.0.0.1:3847` (ou le port choisi).
+
+| Ressource | URL | Rôle |
+|-----------|-----|------|
+| **Swagger UI** | [/api/docs](http://127.0.0.1:3847/api/docs) | Documentation interactive (comme la capture npm) |
+| **OpenAPI 3.1** | `GET /api/openapi.yaml` | Spec machine-readable |
+| **UI graphe** | `/` | Deux onglets : savoir métier / comptes Qonto |
+
+### Usage typique via API
+
+```bash
+# 1. État de l'index
+curl http://127.0.0.1:3847/api/status
+
+# 2. Graphe skills ou transactions
+curl "http://127.0.0.1:3847/api/graph?layer=knowledge"
+curl "http://127.0.0.1:3847/api/graph?layer=accounts"
+
+# 3. Recherche
+curl "http://127.0.0.1:3847/api/query?q=TVA&layer=knowledge"
+
+# 4. Justification (skills)
+curl -X POST http://127.0.0.1:3847/api/justify \
+  -H "Content-Type: application/json" \
+  -d '{"question":"TVA déductible repas client","layer":"knowledge"}'
+
+# 5. Justification (dépenses Qonto)
+curl -X POST http://127.0.0.1:3847/api/justify \
+  -H "Content-Type: application/json" \
+  -d '{"question":"restaurant","layer":"accounts"}'
+```
 
 Toutes les réponses sont en **JSON**. CORS non configuré (usage local).
 
@@ -193,15 +302,22 @@ Toutes les réponses sont en **JSON**. CORS non configuré (usage local).
   "accountCount": 2,
   "transactionCount": 847,
   "providersSynced": ["qonto"],
+  "providersCached": ["qonto", "stripe"],
   "engine": "ladybug"
 }
 ```
 
 ### `GET /api/graph`
 
-Graphe complet sérialisé.
+Graphe sérialisé. Paramètre **`layer`** :
 
-**Réponse 200** :
+| Valeur | Contenu |
+|--------|---------|
+| `knowledge` | Skills, documents, open data |
+| `accounts` | Qonto : transactions, catégories |
+| `all` | Fusion complet |
+
+**Exemple** : `GET /api/graph?layer=accounts`
 
 ```json
 {

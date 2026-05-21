@@ -1,7 +1,7 @@
 {
   "name": "tax-expert-documents",
-  "version": "0.1.0",
-  "description": "Knowledge graph fiscalité française pour agents IA — open data, skills Markdown, LadybugDB, MCP",
+  "version": "0.2.0",
+  "description": "Graphe fiscal/comptable FR pour agents IA — skills paperasse, open data, Qonto, justification, Swagger /api/docs, MCP",
   "type": "module",
   "bin": {
     "ted": "./bin/ted.js"
@@ -12,12 +12,15 @@
     "web",
     "skills",
     "company.example.json",
-    "README.md"
+    "openapi.yaml",
+    "README.md",
+    "docs/images"
   ],
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "npm run build",
     "analyze": "node bin/ted.js analyze",
+    "sync": "node bin/ted.js sync",
     "mcp": "node bin/ted.js mcp",
     "serve": "node bin/ted.js serve",
     "status": "node bin/ted.js status"

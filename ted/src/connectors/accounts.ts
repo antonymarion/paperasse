@@ -4,6 +4,7 @@ import type { KnowledgeGraph } from '../core/types.js';
 import { journalEntriesPath } from '../core/paths.js';
 import { fiscalYearRange, loadCompanyConfig } from './company.js';
 import { loadCachedTransactions, syncQonto, type NormalizedTransaction } from './qonto.js';
+import { syncStripe } from './stripe.js';
 
 function slug(s: string): string {
   return s
@@ -18,7 +19,10 @@ function nodeId(label: string, ...parts: string[]): string {
 }
 
 export interface AccountsSyncSummary {
-  providers: string[];
+  /** Fournisseurs synchronisés via API lors de ce `ted analyze`. */
+  providersSynced: string[];
+  /** Fournisseurs présents dans le cache local `~/.ted/data/transactions/*.json`. */
+  providersCached: string[];
   accountCount: number;
   transactionCount: number;
   warnings: string[];
@@ -27,7 +31,7 @@ export interface AccountsSyncSummary {
 export async function syncAccountData(): Promise<AccountsSyncSummary> {
   const company = loadCompanyConfig();
   const range = fiscalYearRange(company);
-  const providers: string[] = [];
+  const providersSynced: string[] = [];
   const warnings: string[] = [];
 
   const qontoExplicitOff = company?.qonto?.enabled === false;
@@ -39,9 +43,9 @@ export async function syncAccountData(): Promise<AccountsSyncSummary> {
         updated_at_from: range.from,
         updated_at_to: range.to,
       });
-      providers.push('qonto');
+      providersSynced.push('qonto');
       for (const a of result.accounts) {
-        console.log(`[ted] Qonto ${a.name}: ${a.count} transaction(s)`);
+        console.log(`[ted] Qonto ${a.name}: ${a.count} transaction(s) (API)`);
       }
     } catch (err) {
       warnings.push(`Qonto: ${(err as Error).message}`);
@@ -51,20 +55,40 @@ export async function syncAccountData(): Promise<AccountsSyncSummary> {
     warnings.push('Qonto activé dans company.json mais QONTO_ID / QONTO_API_SECRET absents');
   }
 
-  // Stripe / Dougs : ingestion du cache JSON local (stripe-*.json, dougs-*.json)
-  const cachedBefore = loadCachedTransactions().length;
-  if (cachedBefore > 0) {
-    const sources = new Set(loadCachedTransactions().map((t) => t.source));
-    for (const s of sources) {
-      if (!providers.includes(s)) providers.push(s);
+  const stripeAccounts = company?.stripe_accounts ?? [];
+  if (stripeAccounts.length > 0) {
+    const rangeStart = range.from?.slice(0, 10);
+    const rangeEnd = range.to?.slice(0, 10);
+    try {
+      const result = await syncStripe({
+        startDate: rangeStart,
+        endDate: rangeEnd,
+      });
+      if (result.accounts.length > 0) {
+        providersSynced.push('stripe');
+        for (const a of result.accounts) {
+          console.log(`[ted] Stripe ${a.name}: ${a.count} transaction(s) (API)`);
+        }
+      }
+    } catch (err) {
+      warnings.push(`Stripe: ${(err as Error).message}`);
+      console.warn('[ted] Stripe ignoré:', (err as Error).message);
     }
   }
 
   const txs = loadCachedTransactions();
+  const providersCached = [...new Set(txs.map((t) => t.source))];
+  if (providersCached.length > 0) {
+    console.log(
+      `[ted] Cache local: ${txs.length} transaction(s) (${providersCached.join(', ')}) — ~/.ted/data/transactions/`,
+    );
+  }
+
   const accountIds = new Set(txs.map((t) => `${t.source}:${t.accountId}`));
 
   return {
-    providers,
+    providersSynced,
+    providersCached,
     accountCount: accountIds.size,
     transactionCount: txs.length,
     warnings,
@@ -83,7 +107,7 @@ export function transactionsToGraph(
     id: companyId,
     label: 'Company',
     name: companyName ?? 'Société',
-    properties: {},
+    properties: { layer: 'accounts' },
   });
   nodeIds.add(companyId);
 
@@ -96,7 +120,7 @@ export function transactionsToGraph(
         id: providerId,
         label: 'Provider',
         name: tx.source,
-        properties: { type: tx.source },
+        properties: { type: tx.source, layer: 'accounts' },
       });
       graph.edges.push({
         id: `e:${companyId}->${providerId}`,
@@ -122,6 +146,7 @@ export function transactionsToGraph(
           source: tx.source,
           accountId: tx.accountId,
           iban: tx.iban ?? '',
+          layer: 'accounts',
         },
       });
       graph.edges.push({
@@ -157,6 +182,7 @@ export function transactionsToGraph(
         our_category: tx.our_category ?? '',
         accountId: tx.accountId,
         accountName: tx.accountName,
+        layer: 'accounts',
       },
     });
 
@@ -175,7 +201,7 @@ export function transactionsToGraph(
           id: catId,
           label: 'Concept',
           name: tx.category,
-          properties: { kind: 'bank_category' },
+          properties: { kind: 'bank_category', layer: 'accounts' },
         });
       }
       graph.edges.push({
@@ -194,7 +220,7 @@ export function transactionsToGraph(
           id: pcgId,
           label: 'Concept',
           name: String(tx.our_category),
-          properties: { kind: 'pcg_account' },
+          properties: { kind: 'pcg_account', layer: 'accounts' },
         });
       }
       graph.edges.push({

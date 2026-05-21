@@ -56,7 +56,10 @@ export interface IndexMeta {
   datagouvDatasets: number;
   accountCount: number;
   transactionCount: number;
+  /** Sync API réussie lors du dernier `ted analyze`. */
   providersSynced: string[];
+  /** Données lues depuis ~/.ted/data/transactions/*.json (pas forcément fraîches). */
+  providersCached: string[];
   engine: 'ladybug' | 'json-fallback';
 }
 
@@ -73,6 +76,10 @@ export interface QueryHit {
 export interface JustifyResult {
   question: string;
   summary: string;
+  /** Synthèse en prose du raisonnement. */
+  explanation: string;
+  /** Étapes du raisonnement (chemins dans le graphe skills / open data). */
+  reasoning: string[];
   citations: {
     nodeId: string;
     label: NodeLabel;
@@ -80,5 +87,6 @@ export interface JustifyResult {
     excerpt: string;
     skill?: string;
     document?: string;
+    snippet?: string;
   }[];
 }

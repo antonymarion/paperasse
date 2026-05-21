@@ -17,31 +17,76 @@ export async function startServe(port = DEFAULT_PORT): Promise<void> {
   app.use(express.json());
 
   const webDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../web');
+  const openapiPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../openapi.yaml');
   app.use(express.static(webDir));
+
+  app.get('/api/openapi.yaml', (_req, res) => {
+    res.type('text/yaml').sendFile(openapiPath);
+  });
+
+  app.get('/api/docs', (_req, res) => {
+    res.type('text/html').send(`<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>TED API — Swagger</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    SwaggerUIBundle({
+      url: '/api/openapi.yaml',
+      dom_id: '#swagger-ui',
+      deepLinking: true,
+      presets: [SwaggerUIBundle.presets.apis],
+    });
+  </script>
+</body>
+</html>`);
+  });
 
   app.get('/api/status', (_req, res) => {
     res.json(store.loadMeta() ?? { indexed: false });
   });
 
-  app.get('/api/graph', (_req, res) => {
-    res.json(store.loadGraphJson());
+  app.get('/api/graph', (req, res) => {
+    const layer = String(req.query.layer ?? 'knowledge') as 'knowledge' | 'accounts' | 'all';
+    const valid = ['knowledge', 'accounts', 'all'];
+    res.json(store.loadGraphJson(valid.includes(layer) ? layer : 'knowledge'));
   });
 
   app.get('/api/query', async (req, res) => {
     const q = String(req.query.q ?? '');
     const limit = Number(req.query.limit ?? 20);
-    res.json(await store.query(q, limit));
+    const layer = String(req.query.layer ?? 'all') as 'knowledge' | 'accounts' | 'all';
+    const valid = ['knowledge', 'accounts', 'all'];
+    res.json(await store.query(q, limit, { layer: valid.includes(layer) ? layer : 'all' }));
   });
 
   app.get('/api/context/:nodeId', (req, res) => {
     const depth = Number(req.query.depth ?? 1);
-    res.json(store.context(req.params.nodeId, depth));
+    const layer = String(req.query.layer ?? 'all') as 'knowledge' | 'accounts' | 'all';
+    const valid = ['knowledge', 'accounts', 'all'];
+    res.json(store.context(req.params.nodeId, depth, valid.includes(layer) ? layer : 'all'));
   });
 
   app.post('/api/justify', async (req, res) => {
-    const { question, draft } = req.body as { question?: string; draft?: string };
-    if (!question) return res.status(400).json({ error: 'question requise' });
-    res.json(await justifyAnswer(store, question, draft));
+    const body = req.body as { question?: string; draft?: string; layer?: string };
+    const question = String(body.question ?? body.draft ?? '').trim();
+    if (!question) {
+      return res.status(400).json({ error: 'question ou draft requis' });
+    }
+    const draft =
+      body.draft && body.draft.trim() !== question ? body.draft.trim() : undefined;
+    const layer =
+      body.layer === 'accounts' || body.layer === 'knowledge' ? body.layer : 'knowledge';
+    try {
+      res.json(await justifyAnswer(store, question, draft, layer));
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
   });
 
   app.post('/mcp', async (req, res) => {
@@ -79,6 +124,7 @@ export async function startServe(port = DEFAULT_PORT): Promise<void> {
   app.listen(port, '127.0.0.1', () => {
     console.log(`[ted] UI graphe     http://127.0.0.1:${port}`);
     console.log(`[ted] API REST      http://127.0.0.1:${port}/api/status`);
+    console.log(`[ted] Swagger UI    http://127.0.0.1:${port}/api/docs`);
     console.log(`[ted] MCP (HTTP)    http://127.0.0.1:${port}/mcp`);
     console.log(`[ted] Index         ${indexDir()}`);
   });
